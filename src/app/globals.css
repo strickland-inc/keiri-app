@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/*
+ * デザイントークン（DESIGN.md 参照）。OpenAI の UI を手本にした、モノトーン + 薄い枠線 + 大きめの角丸。
+ * アイコンフォントは下の @font-face で自前配信する（public/fonts/material-symbols.woff2）。
+ */
+@theme {
+  /* ブランドの緑。状態表示・強調・フォーカスに少量だけ使う */
+  --color-brand-50: #e8f9ef;
+  --color-brand-100: #c6f1d6;
+  --color-brand-200: #8fe5b1;
+  --color-brand-300: #4fd587;
+  --color-brand-400: #13c24c;
+  --color-brand-500: #00ac3a;
+  --color-brand-600: #009233;
+  --color-brand-700: #00782b;
+  --color-brand-800: #075f24;
+  --color-brand-900: #07140c;
+
+  /* 面・罫線・文字 */
+  --color-surface: #ffffff;
+  --color-canvas: #f7f7f8;
+  --color-line: #ececec;
+  --color-line-strong: #d9d9de;
+  --color-ink: #0d0d0d;
+  --color-ink-muted: #676767;
+  --color-ink-faint: #9b9b9b;
+
+  /* 状態 */
+  --color-success: #0f9d6a;
+  --color-warning: #b86e00;
+  --color-danger: #d1453b;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo,
+    sans-serif;
+
+  --radius: 0.75rem;
+  --shadow-pop: 0 8px 30px rgb(0 0 0 / 0.08);
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "palt";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 数字は等幅で桁を揃える（金額表示用ユーティリティ） */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * アイコン（Material Symbols）。必要なアイコンだけを含む小さなフォントを自前で配信する。
+ * フォントはリガチャ（"home" → 家の絵）で描くため、読み込み前は英字が見えてしまう。
+ * 1em 角の箱に収めてはみ出しを隠し、読み込み完了（html.icons-ready）まで非表示にする。
+ * @layer base に入れないと、ここの font-size が Tailwind の text-[..] に勝ってしまう。
+ */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 300;
+  font-display: block;
+  src: url("/fonts/material-symbols.woff2") format("woff2");
+}
+
+@layer base {
+  .material-symbols-outlined {
+    font-family: "Material Symbols Outlined";
+    font-weight: 300;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    direction: ltr;
+    font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.material-symbols-outlined {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  visibility: hidden;
+}
+html.icons-ready .material-symbols-outlined {
+  visibility: visible;
+}
