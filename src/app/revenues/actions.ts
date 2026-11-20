@@ -9,7 +9,7 @@ import type { Repositories } from "@/repositories/types";
 
 /**
  * 売上の所属会社は、フォームの値ではなく「今見ている会社」で決める。
- * documents/actions.ts の resolveIssuerId と同じ理由（`.claude/rules/company-scope.md`）。
+ * documents/actions.ts の resolveIssuerId と同じ理由（CLAUDE.md の「会社の切り替え」）。
  */
 async function resolveIssuerId(repos: Repositories): Promise<string> {
   const company = await loadCompanyContext(repos);
