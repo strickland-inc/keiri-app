@@ -3,6 +3,7 @@ import type {
   DocumentFilter,
   DocumentRepository,
   ExpenseFilter,
+  ApiTokenRepository,
   ExpenseRepository,
   IssuerRepository,
   MerchantRuleRepository,
@@ -13,7 +14,11 @@ import type {
   SettingsRepository,
   UserRepository,
 } from "../types";
-import type { DocumentRecord, NewDocumentInput } from "@/domain/documents";
+import type {
+  DocumentRecord,
+  DocumentType,
+  NewDocumentInput,
+} from "@/domain/documents";
 import type { NewPartyInput, Party } from "@/domain/party";
 import type { Issuer, NewIssuerInput } from "@/domain/issuer";
 import type { User, NewUserInput } from "@/domain/user";
@@ -21,14 +26,15 @@ import type { Expense, NewExpenseInput } from "@/domain/expense";
 import type { MerchantRule, NewMerchantRule } from "@/domain/merchant";
 import type { BankTransaction, NewBankTransactionInput } from "@/domain/bank";
 import type { NewRevenueInput, Revenue } from "@/domain/revenue";
+import type { ApiToken, NewApiTokenInput } from "@/domain/api-token";
 import { formatNumber, parseSeq } from "@/domain/numbering";
 import { counterKey, matchesCompany } from "../scope";
 import {
-  ensureSheets,
   readAll,
   appendRow,
   appendRows,
   updateRowById,
+  upsertRowById,
   deleteRowById,
   incrementCounter,
 } from "./sheetsApi";
@@ -50,6 +56,8 @@ import {
   rowToBankTransaction,
   revenueToRow,
   rowToRevenue,
+  apiTokenToRow,
+  rowToApiToken,
 } from "./schema";
 
 function uuid(): string {
@@ -70,7 +78,6 @@ interface SheetCodec<T> {
 }
 
 async function findRow(sheet: string, id: string): Promise<string[] | null> {
-  await ensureSheets();
   const rows = await readAll(sheet);
   return rows.find((r) => r[0] === id) ?? null;
 }
@@ -97,7 +104,6 @@ async function patchRecord<T extends { id: string; updatedAt: string }>(
 }
 
 async function removeRecord(sheet: string, id: string): Promise<void> {
-  await ensureSheets();
   await deleteRowById(sheet, id);
 }
 
@@ -142,7 +148,6 @@ const revenueCodec: SheetCodec<Revenue> = {
 
 const documentRepo: DocumentRepository = {
   async list(filter?: DocumentFilter): Promise<DocumentRecord[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.documents);
     let docs = rows.map(rowToDocument);
     if (filter) docs = docs.filter((d) => matchesCompany(d.issuerId, filter));
@@ -158,20 +163,29 @@ const documentRepo: DocumentRepository = {
   },
 
   async create(input: NewDocumentInput): Promise<DocumentRecord> {
-    await ensureSheets();
+    const floor = await documentRepo.maxSeq(input.issuerId, input.type);
+    const record = await documentRepo.draft(input, floor);
+    await appendRow(SHEET_NAMES.documents, documentToRow(record));
+    return record;
+  },
+
+  async maxSeq(issuerId: string, type: DocumentType): Promise<number> {
+    const rows = await readAll(SHEET_NAMES.documents);
+    return rows
+      .map(rowToDocument)
+      .filter((d) => d.issuerId === issuerId && d.type === type)
+      .reduce((max, d) => Math.max(max, parseSeq(d.number) ?? 0), 0);
+  },
+
+  async draft(input: NewDocumentInput, floor: number): Promise<DocumentRecord> {
     const ts = now();
     // 会社ごとに 0001 から始まる連番にする。カウンター行がまだ無い会社では、
-    // その会社の既存帳票の最大番号を種にして続きから振る。
-    const existing = await readAll(SHEET_NAMES.documents);
-    const maxSeq = existing
-      .map(rowToDocument)
-      .filter((d) => d.issuerId === input.issuerId && d.type === input.type)
-      .reduce((max, d) => Math.max(max, parseSeq(d.number) ?? 0), 0);
+    // その会社の既存帳票の最大番号（floor）の続きから振る。
     const seq = await incrementCounter(
       counterKey(input.issuerId, input.type),
-      maxSeq,
+      floor,
     );
-    const record: DocumentRecord = {
+    return {
       ...input,
       id: uuid(),
       number: formatNumber(input.type, seq),
@@ -179,8 +193,6 @@ const documentRepo: DocumentRepository = {
       createdAt: ts,
       updatedAt: ts,
     };
-    await appendRow(SHEET_NAMES.documents, documentToRow(record));
-    return record;
   },
 
   async update(
@@ -199,7 +211,6 @@ const documentRepo: DocumentRepository = {
 
 const partyRepo: PartyRepository = {
   async list(): Promise<Party[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.parties);
     return rows
       .map(rowToParty)
@@ -211,7 +222,6 @@ const partyRepo: PartyRepository = {
   },
 
   async create(input: NewPartyInput): Promise<Party> {
-    await ensureSheets();
     const ts = now();
     const record: Party = {
       ...input,
@@ -236,7 +246,6 @@ const partyRepo: PartyRepository = {
 
 const issuerRepo: IssuerRepository = {
   async list(): Promise<Issuer[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.issuers);
     return rows.map(rowToIssuer);
   },
@@ -246,14 +255,12 @@ const issuerRepo: IssuerRepository = {
   },
 
   async getDefault(): Promise<Issuer | null> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.issuers);
     const issuers = rows.map(rowToIssuer);
     return issuers.find((i) => i.isDefault) ?? issuers[0] ?? null;
   },
 
   async create(input: NewIssuerInput): Promise<Issuer> {
-    await ensureSheets();
     const ts = now();
     const record: Issuer = {
       ...input,
@@ -278,7 +285,6 @@ const issuerRepo: IssuerRepository = {
 
 const userRepo: UserRepository = {
   async list(): Promise<User[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.users);
     return rows.map(rowToUser);
   },
@@ -288,14 +294,12 @@ const userRepo: UserRepository = {
   },
 
   async findByLoginId(loginId: string): Promise<User | null> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.users);
     const row = rows.find((r) => r[1] === loginId);
     return row ? rowToUser(row) : null;
   },
 
   async create(input: NewUserInput): Promise<User> {
-    await ensureSheets();
     const ts = now();
     const record: User = { ...input, id: uuid(), createdAt: ts, updatedAt: ts };
     await appendRow(SHEET_NAMES.users, userToRow(record));
@@ -311,7 +315,6 @@ const userRepo: UserRepository = {
 
 const expenseRepo: ExpenseRepository = {
   async list(filter?: ExpenseFilter): Promise<Expense[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.expenses);
     let expenses = rows.map(rowToExpense);
     if (filter)
@@ -332,7 +335,6 @@ const expenseRepo: ExpenseRepository = {
   },
 
   async create(input: NewExpenseInput): Promise<Expense> {
-    await ensureSheets();
     const ts = now();
     const record: Expense = {
       ...input,
@@ -345,11 +347,15 @@ const expenseRepo: ExpenseRepository = {
   },
 
   async bulkCreate(inputs: NewExpenseInput[]): Promise<Expense[]> {
-    const results: Expense[] = [];
-    for (const input of inputs) {
-      results.push(await expenseRepo.create(input));
-    }
-    return results;
+    const ts = now();
+    const records = inputs.map((input): Expense => ({
+      ...input,
+      id: uuid(),
+      createdAt: ts,
+      updatedAt: ts,
+    }));
+    await appendRows(SHEET_NAMES.expenses, records.map(expenseToRow));
+    return records;
   },
 
   async update(id: string, patch: Partial<Expense>): Promise<Expense> {
@@ -365,26 +371,16 @@ const expenseRepo: ExpenseRepository = {
 
 const settingsRepo: SettingsRepository = {
   async get(key: string): Promise<string | null> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.settings);
     const row = rows.find((r) => r[0] === key);
     return row ? (row[1] ?? null) : null;
   },
 
   async set(key: string, value: string): Promise<void> {
-    await ensureSheets();
-    const rows = await readAll(SHEET_NAMES.settings);
-    const exists = rows.some((r) => r[0] === key);
-    const updatedAt = now();
-    if (exists) {
-      await updateRowById(SHEET_NAMES.settings, key, [key, value, updatedAt]);
-    } else {
-      await appendRow(SHEET_NAMES.settings, [key, value, updatedAt]);
-    }
+    await upsertRowById(SHEET_NAMES.settings, key, [key, value, now()]);
   },
 
   async all(): Promise<Record<string, string>> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.settings);
     return Object.fromEntries(rows.map((r) => [r[0] ?? "", r[1] ?? ""]));
   },
@@ -394,32 +390,23 @@ const settingsRepo: SettingsRepository = {
 
 const merchantRuleRepo: MerchantRuleRepository = {
   async all(): Promise<MerchantRule[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.merchantRules);
     return rows.map(rowToMerchantRule);
   },
 
   async get(key: string): Promise<MerchantRule | null> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.merchantRules);
     const row = rows.find((r) => r[0] === key);
     return row ? rowToMerchantRule(row) : null;
   },
 
   async upsert(input: NewMerchantRule): Promise<MerchantRule> {
-    await ensureSheets();
-    const rows = await readAll(SHEET_NAMES.merchantRules);
-    const exists = rows.some((r) => r[0] === input.key);
     const rule: MerchantRule = { ...input, updatedAt: now() };
-    if (exists) {
-      await updateRowById(
-        SHEET_NAMES.merchantRules,
-        input.key,
-        merchantRuleToRow(rule),
-      );
-    } else {
-      await appendRow(SHEET_NAMES.merchantRules, merchantRuleToRow(rule));
-    }
+    await upsertRowById(
+      SHEET_NAMES.merchantRules,
+      input.key,
+      merchantRuleToRow(rule),
+    );
     return rule;
   },
 };
@@ -428,7 +415,6 @@ const merchantRuleRepo: MerchantRuleRepository = {
 
 const bankTransactionRepo: BankTransactionRepository = {
   async list(): Promise<BankTransaction[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.bankTransactions);
     return rows
       .map(rowToBankTransaction)
@@ -436,7 +422,6 @@ const bankTransactionRepo: BankTransactionRepository = {
   },
 
   async get(id: string): Promise<BankTransaction | null> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.bankTransactions);
     const row = rows.find((r) => r[0] === id);
     return row ? rowToBankTransaction(row) : null;
@@ -445,7 +430,6 @@ const bankTransactionRepo: BankTransactionRepository = {
   async bulkCreate(
     inputs: NewBankTransactionInput[],
   ): Promise<BankTransaction[]> {
-    await ensureSheets();
     const ts = now();
     const records = inputs.map((input): BankTransaction => ({
       ...input,
@@ -464,7 +448,6 @@ const bankTransactionRepo: BankTransactionRepository = {
     id: string,
     patch: Partial<BankTransaction>,
   ): Promise<BankTransaction> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.bankTransactions);
     const row = rows.find((r) => r[0] === id);
     if (!row) throw new Error(`銀行明細が見つかりません: ${id}`);
@@ -483,7 +466,6 @@ const bankTransactionRepo: BankTransactionRepository = {
   },
 
   async remove(id: string): Promise<void> {
-    await ensureSheets();
     await deleteRowById(SHEET_NAMES.bankTransactions, id);
   },
 };
@@ -492,7 +474,6 @@ const bankTransactionRepo: BankTransactionRepository = {
 
 const revenueRepo: RevenueRepository = {
   async list(filter?: RevenueFilter): Promise<Revenue[]> {
-    await ensureSheets();
     const rows = await readAll(SHEET_NAMES.revenues);
     let revenues = rows.map(rowToRevenue);
     if (filter)
@@ -507,7 +488,6 @@ const revenueRepo: RevenueRepository = {
   },
 
   async create(input: NewRevenueInput): Promise<Revenue> {
-    await ensureSheets();
     const ts = now();
     const record: Revenue = {
       ...input,
@@ -520,7 +500,6 @@ const revenueRepo: RevenueRepository = {
   },
 
   async bulkCreate(inputs: NewRevenueInput[]): Promise<Revenue[]> {
-    await ensureSheets();
     const ts = now();
     const records = inputs.map((input): Revenue => ({
       ...input,
@@ -542,6 +521,25 @@ const revenueRepo: RevenueRepository = {
   },
 };
 
+// ── ApiTokenRepository ────────────────────────────────────────────────────────
+
+const apiTokenRepo: ApiTokenRepository = {
+  async list(): Promise<ApiToken[]> {
+    const rows = await readAll(SHEET_NAMES.apiTokens);
+    return rows.map(rowToApiToken);
+  },
+
+  async create(input: NewApiTokenInput): Promise<ApiToken> {
+    const record: ApiToken = { ...input, id: uuid(), createdAt: now() };
+    await appendRow(SHEET_NAMES.apiTokens, apiTokenToRow(record));
+    return record;
+  },
+
+  async remove(id: string): Promise<void> {
+    await removeRecord(SHEET_NAMES.apiTokens, id);
+  },
+};
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 export const sheetsRepositories: Repositories = {
@@ -554,5 +552,6 @@ export const sheetsRepositories: Repositories = {
   merchantRules: merchantRuleRepo,
   bankTransactions: bankTransactionRepo,
   revenues: revenueRepo,
+  apiTokens: apiTokenRepo,
   backend: "sheets",
 };

@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { isDemoMode } from "@/lib/auth";
+import { countUsers } from "@/lib/setup-state";
 import { login } from "./actions";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -9,6 +12,11 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string; next?: string }>;
 }) {
+  if (isDemoMode()) redirect("/");
+  // ユーザーが 1 人もいなければ、最初の管理者を作る画面へ送る。
+  const users = await countUsers();
+  if (users.ok && users.count === 0) redirect("/setup");
+
   const sp = await searchParams;
   const hasError = sp.error === "1";
   const next = sp.next ?? "/";
@@ -19,6 +27,12 @@ export default async function LoginPage({
         <h1 className="mb-8 text-center text-2xl font-semibold tracking-tight">
           KEIRI にログイン
         </h1>
+
+        {!users.ok && (
+          <Alert tone="danger" className="mb-4">
+            {users.message}
+          </Alert>
+        )}
 
         {hasError && (
           <Alert tone="danger" className="mb-4">

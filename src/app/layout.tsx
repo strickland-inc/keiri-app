@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { IconFontGate } from "@/components/icon-font-gate";
-import { PwaRegister } from "@/components/pwa-register";
-import { SESSION_COOKIE, verifySession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { loadSession } from "@/lib/session";
 import { getRepositories } from "@/repositories";
 import { loadCompanyContext } from "@/lib/active-company";
 import type { Issuer } from "@/domain/issuer";
@@ -50,9 +49,10 @@ async function loadCompaniesForShell(): Promise<{
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const session = await verifySession(token);
-  // ログイン前（ログイン画面）は会社を読まない。Sheets への通信と Workers の CPU を使わないため。
+  const { session, stale } = await loadSession();
+  // 消されたユーザーの Cookie は、ログアウトの経路で片付けて、ログイン画面へ戻す。
+  if (stale) redirect("/logout");
+  // ログイン前（ログイン画面）は会社を読まない。スプレッドシートへの通信を増やさないため。
   const { companies, activeCompanyId } = session
     ? await loadCompaniesForShell()
     : { companies: [], activeCompanyId: null };
@@ -78,7 +78,6 @@ export default async function RootLayout({
           {children}
         </AppShell>
         <IconFontGate />
-        <PwaRegister />
       </body>
     </html>
   );

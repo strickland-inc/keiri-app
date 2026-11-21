@@ -2,8 +2,10 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createSession, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/auth";
+import { SESSION_COOKIE } from "@/lib/auth";
 import { verifyCredentials } from "@/lib/auth-server";
+import { sitePath } from "@/lib/site-path";
+import { startSession } from "@/lib/session";
 
 export async function login(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "").trim();
@@ -17,20 +19,9 @@ export async function login(formData: FormData): Promise<void> {
     );
   }
 
-  const token = await createSession(result.userId, result.role);
-  const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE,
-  });
+  await startSession(result.userId, result.role);
 
-  // ログイン後の遷移先はサイト内のパスだけに限る。
-  // "//example.com" や "/\\example.com" はブラウザが別のサイトの URL として読むので通さない。
-  const isSitePath = /^\/(?![/\\])/.test(next);
-  redirect(isSitePath ? next : "/");
+  redirect(sitePath(next));
 }
 
 export async function logout(): Promise<void> {

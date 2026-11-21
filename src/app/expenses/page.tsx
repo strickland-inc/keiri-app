@@ -21,7 +21,7 @@ import { recentMonths, toYearMonth } from "@/domain/dates";
 import { firstParam, type SearchParamValue } from "@/lib/search-params";
 import { Icon } from "@/components/ui/icon";
 import { buttonVariants } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, SectionCard } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { LinkTabs } from "@/components/ui/tabs";
@@ -35,6 +35,8 @@ import {
   Tr,
 } from "@/components/ui/table";
 import { CategorySelect } from "./category-select";
+import { DeleteExpenseButton } from "./delete-button";
+import { ExpenseForm } from "./expense-form";
 import { ExpenseSearchForm } from "./expense-search-form";
 
 export const dynamic = "force-dynamic";
@@ -140,6 +142,10 @@ export default async function ExpensesPage({
         }
       />
 
+      <SectionCard title="経費を追加">
+        <ExpenseForm />
+      </SectionCard>
+
       <div className="flex flex-col gap-4">
         <LinkTabs label="期間" items={periodTabs(filters, defaultMonth)} />
         <ExpenseSearchForm
@@ -168,7 +174,7 @@ export default async function ExpensesPage({
           description={
             isSearchActive
               ? "キーワードや絞り込み条件を変えて、もう一度お試しください。"
-              : "楽天カード明細の取り込みスクリプトで追加できます。"
+              : "上のフォームか、レシートのスキャンで追加できます。"
           }
           action={
             isSearchActive && (
@@ -265,6 +271,9 @@ function ExpenseTable({ expenses }: { expenses: Expense[] }) {
           <Th align="right">金額</Th>
           <Th>費目</Th>
           <Th>ソース</Th>
+          <Th>
+            <span className="sr-only">操作</span>
+          </Th>
         </THead>
         <TBody>
           {expenses.map((expense) => (
@@ -284,6 +293,9 @@ function ExpenseTable({ expenses }: { expenses: Expense[] }) {
               </Td>
               <Td muted className="text-xs">
                 {expense.source}
+              </Td>
+              <Td align="right">
+                <DeleteExpenseButton id={expense.id} />
               </Td>
             </Tr>
           ))}

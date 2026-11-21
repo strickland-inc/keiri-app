@@ -1,5 +1,7 @@
 "use server";
 
+import { assertSession } from "@/lib/session";
+
 import { revalidatePath } from "next/cache";
 import { getRepositories } from "@/repositories";
 import { RECEIVABLE, accountsFor } from "@/domain/bank";
@@ -14,6 +16,7 @@ export async function changeBankAccount(
   id: string,
   account: string,
 ): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   const tx = await repos.bankTransactions.get(id);
   if (!tx) throw new Error("明細が見つかりません");
@@ -38,6 +41,7 @@ export async function changeBankAccount(
 
 /** 判断が正しいことを確認した。 */
 export async function confirmBankTransaction(id: string): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   await repos.bankTransactions.update(id, {
     needsReview: false,
@@ -48,6 +52,7 @@ export async function confirmBankTransaction(id: string): Promise<void> {
 }
 
 export async function removeBankTransaction(id: string): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   await repos.bankTransactions.remove(id);
   refresh();

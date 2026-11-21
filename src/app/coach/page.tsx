@@ -58,7 +58,7 @@ export default async function CoachPage({
     <div className="flex flex-col gap-8">
       <PageHeader
         title="今月のお金"
-        description="Web の画面とエージェント向け API が、同じ集計結果を参照します。"
+        description="月の予算と固定費から、今月あといくら使えるかを見ます。"
       />
 
       <div className="grid gap-4 sm:grid-cols-3">

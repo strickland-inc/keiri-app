@@ -10,28 +10,16 @@ import { bindings, defineConfig, defineWorker } from "cf/config";
  *  - 無料プランは上限（CPU 10ms・外部通信 50 回・1 日 10 万リクエスト）を超えるとエラーになるだけで、請求は発生しない。
  */
 
-/** アプリが読む秘密情報の名前。環境変数（process.env）で渡された名前だけをシークレットとして宣言する。 */
+/**
+ * アプリが読む秘密の値の名前。必須は接続コード（KEIRI_CONNECTION）だけで、残りは任意の API キー。
+ * 値のある名前だけを宣言する。値は、環境変数、.env.local（ビルドのときに読み込まれる）、
+ * .dev.vars（ローカルで Workers として動かすとき）のどれかにあればよい。
+ */
 const SECRET_NAMES = [
-  "APP_LOGIN_ID",
-  "APP_LOGIN_PASSWORD",
-  "AUTH_SECRET",
-  "GOOGLE_SERVICE_ACCOUNT_EMAIL",
-  "GOOGLE_PRIVATE_KEY",
-  "SHEETS_SPREADSHEET_ID",
-  "DOCUMENT_TEMPLATE_SPREADSHEET_ID",
-  "DOCUMENT_TEMPLATE_SHEET_ID",
-  "DOCUMENT_OUTPUT_FOLDER_ID",
+  "KEIRI_CONNECTION",
   "GEMINI_API_KEY",
-  "ANTHROPIC_API_KEY",
   "TYPESAFE_API_KEY",
   "TYPESAFE_MODEL",
-  "AGENT_READ_TOKEN",
-  "AGENT_WRITE_TOKEN",
-  "AGENT_DOCUMENTS_TOKEN",
-  "PUSH_SECRET",
-  "VAPID_SUBJECT",
-  "VAPID_PUBLIC_KEY",
-  "VAPID_PRIVATE_KEY",
 ] as const;
 
 /** ローカル開発用の .dev.vars に書かれている名前（配備時には無い）。 */

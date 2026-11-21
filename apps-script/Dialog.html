@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <style>
+      body {
+        font-family: "Noto Sans JP", "Hiragino Sans", sans-serif;
+        font-size: 14px;
+        line-height: 1.7;
+        color: #0d0d0d;
+        margin: 0;
+        padding: 4px 4px 0;
+      }
+      ol {
+        padding-left: 20px;
+        margin: 8px 0 16px;
+      }
+      label {
+        display: block;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      input,
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        font: inherit;
+        padding: 8px 10px;
+        border: 1px solid #d9d9de;
+        border-radius: 8px;
+      }
+      textarea {
+        height: 96px;
+        resize: none;
+        word-break: break-all;
+      }
+      button {
+        font: inherit;
+        font-weight: 700;
+        margin-top: 12px;
+        padding: 8px 20px;
+        border: 0;
+        border-radius: 999px;
+        background: #0d0d0d;
+        color: #fff;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .note {
+        color: #676767;
+        font-size: 13px;
+      }
+      .error {
+        color: #c62828;
+        margin-top: 12px;
+      }
+      [hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <section id="ask">
+      <? if (rotate) { ?>
+      <p>
+        接続コードを作り直すと、今の接続コードは使えなくなります。アプリ側の接続コードも入れ替えてください。
+      </p>
+      <? } else { ?>
+      <ol>
+        <li>メニューの「拡張機能」から「Apps Script」を開く。</li>
+        <li>右上の「デプロイ」から「新しいデプロイ」を選ぶ。</li>
+        <li>種類は「ウェブアプリ」を選ぶ。</li>
+        <li>「次のユーザーとして実行」を「自分」にする。</li>
+        <li>「アクセスできるユーザー」を「全員」にして、デプロイする。</li>
+        <li>表示された「ウェブアプリ」の URL を、下に貼り付ける。</li>
+      </ol>
+      <? } ?>
+      <label for="url">ウェブアプリの URL</label>
+      <input
+        id="url"
+        type="url"
+        placeholder="https://script.google.com/macros/s/…/exec"
+      />
+      <button id="issue">接続コードを発行</button>
+      <p id="error" class="error" hidden></p>
+    </section>
+
+    <section id="done" hidden>
+      <label for="code">接続コード</label>
+      <textarea id="code" readonly></textarea>
+      <button id="copy">コピー</button>
+      <p class="note">
+        このコードを、アプリの KEIRI_CONNECTION
+        に設定します。コードを知っている人は、このスプレッドシートを読み書きできます。人に見せないでください。
+      </p>
+    </section>
+
+    <script>
+      const rotate = <?!= JSON.stringify(Boolean(rotate)) ?>;
+      const issue = document.getElementById("issue");
+      const error = document.getElementById("error");
+
+      issue.addEventListener("click", () => {
+        issue.disabled = true;
+        error.hidden = true;
+        google.script.run
+          .withSuccessHandler((code) => {
+            document.getElementById("code").value = code;
+            document.getElementById("ask").hidden = true;
+            document.getElementById("done").hidden = false;
+          })
+          .withFailureHandler((failure) => {
+            error.textContent = failure.message;
+            error.hidden = false;
+            issue.disabled = false;
+          })
+          .issueConnectionCode(document.getElementById("url").value, rotate);
+      });
+
+      document.getElementById("copy").addEventListener("click", () => {
+        const code = document.getElementById("code");
+        code.select();
+        navigator.clipboard.writeText(code.value).catch(() => document.execCommand("copy"));
+        document.getElementById("copy").textContent = "コピーしました";
+      });
+    </script>
+  </body>
+</html>

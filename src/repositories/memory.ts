@@ -1,5 +1,5 @@
 /**
- * InMemory Repository。サービスアカウント未設定でもアプリが完全に動くようにする。
+ * InMemory Repository。接続コードが未設定でも、デモデータでアプリを動かせるようにする。
  * デモ用のシードデータを持つ。サーバーレスでは揮発しうる（永続が必要なら Sheets/DB へ）。
  */
 import {
@@ -11,12 +11,14 @@ import { formatNumber, parseSeq } from "@/domain/numbering";
 import type { NewPartyInput, Party } from "@/domain/party";
 import type { Issuer, NewIssuerInput } from "@/domain/issuer";
 import type { User, NewUserInput } from "@/domain/user";
+import type { ApiToken, NewApiTokenInput } from "@/domain/api-token";
 import type { Expense, NewExpenseInput } from "@/domain/expense";
 import type { MerchantRule, NewMerchantRule } from "@/domain/merchant";
 import type { NewRevenueInput, Revenue } from "@/domain/revenue";
 import { counterKey, matchesCompany, nextSequence } from "./scope";
 import type { BankTransaction, NewBankTransactionInput } from "@/domain/bank";
 import type {
+  ApiTokenRepository,
   BankTransactionRepository,
   DocumentFilter,
   DocumentRepository,
@@ -281,8 +283,18 @@ const documentRepo: DocumentRepository = {
     return documents.find((d) => d.id === id) ?? null;
   },
   async create(input: NewDocumentInput): Promise<DocumentRecord> {
+    const record = await documentRepo.draft(input, 0);
+    documents.push(record);
+    return record;
+  },
+  async maxSeq(issuerId: string, type: DocumentType): Promise<number> {
+    return documents
+      .filter((d) => d.issuerId === issuerId && d.type === type)
+      .reduce((max, d) => Math.max(max, parseSeq(d.number) ?? 0), 0);
+  },
+  async draft(input: NewDocumentInput): Promise<DocumentRecord> {
     const ts = now();
-    const record: DocumentRecord = {
+    return {
       ...input,
       id: uuid(),
       number: formatNumber(input.type, nextSeq(input.issuerId, input.type)),
@@ -290,8 +302,6 @@ const documentRepo: DocumentRepository = {
       createdAt: ts,
       updatedAt: ts,
     };
-    documents.push(record);
-    return record;
   },
   async update(
     id: string,
@@ -570,6 +580,23 @@ const revenueRepo: RevenueRepository = {
   },
 };
 
+const apiTokens: ApiToken[] = [];
+
+const apiTokenRepo: ApiTokenRepository = {
+  async list(): Promise<ApiToken[]> {
+    return [...apiTokens];
+  },
+  async create(input: NewApiTokenInput): Promise<ApiToken> {
+    const record: ApiToken = { ...input, id: uuid(), createdAt: now() };
+    apiTokens.push(record);
+    return record;
+  },
+  async remove(id: string): Promise<void> {
+    const index = apiTokens.findIndex((token) => token.id === id);
+    if (index >= 0) apiTokens.splice(index, 1);
+  },
+};
+
 export const memoryRepositories: Repositories = {
   documents: documentRepo,
   parties: partyRepo,
@@ -580,5 +607,6 @@ export const memoryRepositories: Repositories = {
   merchantRules: merchantRuleRepo,
   bankTransactions: bankTransactionRepo,
   revenues: revenueRepo,
+  apiTokens: apiTokenRepo,
   backend: "memory",
 };

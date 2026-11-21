@@ -10,6 +10,7 @@ import {
 import type { MerchantRule } from "@/domain/merchant";
 import type { BankTransaction, ClassifyMethod } from "@/domain/bank";
 import type { Revenue } from "@/domain/revenue";
+import type { ApiToken } from "@/domain/api-token";
 
 /**
  * Google Sheets の列定義と、行（文字列の配列）とドメイン型の相互変換。
@@ -27,6 +28,7 @@ export const SHEET_NAMES = {
   merchantRules: "merchant_rules",
   bankTransactions: "bank_transactions",
   revenues: "revenues",
+  apiTokens: "api_tokens",
 } as const;
 
 export const DOCUMENTS_HEADERS = [
@@ -507,3 +509,39 @@ export function rowToRevenue(row: string[]): Revenue {
     updatedAt: g(10),
   };
 }
+
+// ── ApiToken ──────────────────────────────────────────────────────────────────
+
+export const API_TOKENS_HEADERS = [
+  "id",
+  "name",
+  "tokenHash",
+  "createdAt",
+] as const;
+
+export function apiTokenToRow(token: ApiToken): string[] {
+  return [token.id, token.name, token.tokenHash, token.createdAt];
+}
+
+export function rowToApiToken(row: string[]): ApiToken {
+  const g = (i: number): string => row[i] ?? "";
+  return { id: g(0), name: g(1), tokenHash: g(2), createdAt: g(3) };
+}
+
+/** アプリが使う表のタブと見出し。スプレッドシートに無いタブは、この見出しで作る。 */
+export const TABLES: ReadonlyArray<{
+  name: string;
+  header: readonly string[];
+}> = [
+  { name: SHEET_NAMES.documents, header: DOCUMENTS_HEADERS },
+  { name: SHEET_NAMES.parties, header: PARTIES_HEADERS },
+  { name: SHEET_NAMES.issuers, header: ISSUERS_HEADERS },
+  { name: SHEET_NAMES.expenses, header: EXPENSES_HEADERS },
+  { name: SHEET_NAMES.revenues, header: REVENUES_HEADERS },
+  { name: SHEET_NAMES.bankTransactions, header: BANK_TRANSACTIONS_HEADERS },
+  { name: SHEET_NAMES.merchantRules, header: MERCHANT_RULES_HEADERS },
+  { name: SHEET_NAMES.counters, header: COUNTERS_HEADERS },
+  { name: SHEET_NAMES.settings, header: SETTINGS_HEADERS },
+  { name: SHEET_NAMES.users, header: USERS_HEADERS },
+  { name: SHEET_NAMES.apiTokens, header: API_TOKENS_HEADERS },
+];
