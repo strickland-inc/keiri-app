@@ -7,7 +7,6 @@ import type {
   ExpenseRepository,
   SettingsRepository,
 } from "../repositories/types.ts";
-import { moneyPlanRevision } from "./money-write-service.ts";
 
 interface MoneySnapshotRepositories {
   expenses: ExpenseRepository;
@@ -26,8 +25,5 @@ export async function loadMoneySnapshot(
     repositories.expenses.list(),
     repositories.settings.get(`money_plan:${month}`),
   ]);
-  return {
-    ...calculateMoneySnapshot(expenses, parseMoneyPlan(month, rawPlan), asOf),
-    planRevision: moneyPlanRevision(rawPlan),
-  };
+  return calculateMoneySnapshot(expenses, parseMoneyPlan(month, rawPlan), asOf);
 }

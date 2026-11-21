@@ -93,6 +93,7 @@ export const NAV_BLOCKS: NavBlock[] = [
             items: [
               { label: "経費一覧", href: "/expenses" },
               { label: "レシート取込", href: "/expenses/scan" },
+              { label: "カード明細の取込", href: "/expenses/import" },
             ],
           },
         ],
@@ -172,7 +173,7 @@ export const NAV_BLOCKS: NavBlock[] = [
         sections: [
           {
             items: [
-              { label: "通知", href: "/settings" },
+              { label: "API トークン", href: "/settings", adminOnly: true },
               { label: "ユーザー管理", href: "/admin", adminOnly: true },
             ],
           },

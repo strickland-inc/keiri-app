@@ -45,25 +45,22 @@ description: 経費（カード明細・領収書）を勘定科目に分類す�
 
 ## 分類の流れ
 
-`scripts/classify.mjs` が分類する。順番は次のとおり。
+`src/domain/expense-rules.ts` の `classifyExpense` が分類する。順番は次のとおり。
 
-1. 学習辞書（`merchant_rules` シート）。アプリの一覧で費目を直すと、その利用先が自動で記憶される。
-2. `RULES`（店名の正規表現から科目を引く辞書）
-3. 金額（10万円以上の物品は要確認）
-4. Gemini
-5. 要確認
+1. 学習辞書（`merchant_rules` タブ）。アプリの一覧で費目を直すと、その利用先が自動で記憶される。
+2. `EXPENSE_RULES`（店名の正規表現から科目を引く辞書）
+3. 金額（どのルールにも当たらない 10 万円以上は要確認）
+4. 要確認
 
-- 全ガソリンスタンドを車両費にする、のような店をまたぐ決まりは、`RULES` に `[/店名の正規表現/i, "科目"]` を足す。
-- 学習辞書の初期データは `node scripts/seed-merchant-rules.mjs` で、既存の経費の最頻の費目から作る。
-- freee 標準以外の科目を使うときは、`src/domain/expense.ts` の `EXPENSE_CATEGORIES` と `scripts/classify.mjs` の `CATEGORIES` を同じ内容に直す。
+- 全ガソリンスタンドを車両費にする、のような店をまたぐ決まりは、`EXPENSE_RULES` に `[/店名の正規表現/i, "科目"]` を足す。
+- freee 標準以外の科目を使うときは、`src/domain/expense.ts` の `EXPENSE_CATEGORIES` に足す。
 
 ## 取込
 
-- 楽天カードは、`scripts/gas/` の Google Apps Script がメールから自動で取り込む。同じ期間を CSV（`import-rakuten.mjs`）でも取り込むと二重に計上されるので、CSV は使わない。
-- PayPay は CSV で取り込む。`node scripts/import-paypay.mjs <csv>`
-- Gemini のキーを GAS に設定していないと、メールから取り込んだ経費は要確認になる。`node scripts/reclassify-expenses.mjs` で分類し直すか、一覧で直す。
-- `reclassify-expenses.mjs` は全件を分類し直し、手で直した費目も上書きする。
-- 件数と費目別の合計は `node scripts/check-expenses.mjs` で見る。
+- カード明細の CSV は、アプリの「カード明細の取込」（`/expenses/import`）で取り込む。楽天カードの利用明細と PayPay の取引履歴の CSV は列を自動で読み、それ以外は見出しから日付・利用先・金額の列を推定する。
+- 同じ日付・利用先・金額の経費は、取込済みとして飛ばす。
+- レシートは「レシート取込」（`/expenses/scan`）で撮影して読み取る（Gemini の API キーが要る）。
+- 1 件ずつ足すときは、経費一覧のフォームから手入力する。
 
 ## freee への連携
 

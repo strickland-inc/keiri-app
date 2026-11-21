@@ -1,6 +1,6 @@
 /**
- * 認証のサーバー専用部分。パスワードのハッシュ（PBKDF2）と Repository に依存するため、
- * Edge で動く lib/auth.ts とは分離する（proxy が重い依存を巻き込まないように）。
+ * 認証のうち、パスワードのハッシュ（PBKDF2）と Repository に依存する部分。
+ * proxy が読み込む lib/auth.ts とは分ける（proxy が Repository を巻き込まないように）。
  */
 import { getRepositories } from "@/repositories";
 import type { UserRole } from "@/domain/user";
@@ -10,40 +10,24 @@ export interface AuthResult {
   role: UserRole;
 }
 
-/**
- * ログイン資格情報を検証する。
- * 1) 環境変数の管理者（ブートストラップ。ユーザーが1人もいなくても管理者ログインできる）
- * 2) 保存済みユーザー（loginId + bcrypt 照合）
- */
+/** ログイン ID とパスワードを、保存済みのユーザーと照合する。 */
 export async function verifyCredentials(
   loginId: string,
   password: string,
 ): Promise<AuthResult | null> {
-  const adminId = process.env.APP_LOGIN_ID;
-  const adminPw = process.env.APP_LOGIN_PASSWORD;
-  if (
-    adminId &&
-    adminPw &&
-    constantTimeEqual(loginId, adminId) &&
-    constantTimeEqual(password, adminPw)
-  ) {
-    return { userId: adminId, role: "admin" };
-  }
-
   const repos = await getRepositories();
   const user = await repos.users.findByLoginId(loginId);
-  if (user && (await verifyPassword(password, user.passwordHash))) {
-    return { userId: user.id, role: user.role };
-  }
-  return null;
+  // ユーザーが無いときも同じ計算をして、応答の速さから ID の有無が分からないようにする。
+  const ok = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
+  return user && ok ? { userId: user.id, role: user.role } : null;
 }
 
 // ── パスワードのハッシュ ───────────────────────────────────────────────────────
-// PBKDF2-SHA256（Web Crypto）。bcrypt は純 JS で CPU を使い、Cloudflare Workers の無料枠
-// （CPU 10ms/リクエスト）に収まらないため。パスワードは generatePassword が作る
-// ランダム 12 文字（約 70 ビット）なので、反復回数を抑えても総当たりには耐える。
+// PBKDF2-SHA256（Web Crypto）。Cloudflare Workers の無料枠（CPU 10ms/リクエスト）に収めるため、
+// 反復回数を抑えている。その分、パスワードは 12 文字以上にして、総当たりに耐えるようにする。
 const PBKDF2_PREFIX = "pbkdf2-sha256";
 const PBKDF2_ITERATIONS = 20_000;
+const DUMMY_HASH = `${PBKDF2_PREFIX}$${PBKDF2_ITERATIONS}$${"0".repeat(32)}$${"0".repeat(64)}`;
 
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -54,7 +38,7 @@ function fromHex(hex: string): Uint8Array {
 }
 
 /** 長さが同じなら全桁を比べる（途中で止めない）。 */
-function constantTimeEqual(a: string, b: string): boolean {
+export function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -87,23 +71,15 @@ export async function hashPassword(password: string): Promise<string> {
   return `${PBKDF2_PREFIX}$${PBKDF2_ITERATIONS}$${toHex(salt)}$${hash}`;
 }
 
-/** 新形式（PBKDF2）と、以前に発行した bcrypt 形式の両方を照合する。 */
 export async function verifyPassword(
   password: string,
   stored: string,
 ): Promise<boolean> {
-  if (stored.startsWith(`${PBKDF2_PREFIX}$`)) {
-    const [, iterations, salt, hash] = stored.split("$");
-    const n = Number(iterations);
-    if (!Number.isInteger(n) || n < 1 || !salt || !hash) return false;
-    return constantTimeEqual(await derive(password, fromHex(salt), n), hash);
-  }
-  // 旧形式（bcrypt）。使うときだけ読み込む（CPU を使うため、Workers 無料枠では失敗しうる）
-  if (stored.startsWith("$2")) {
-    const bcrypt = (await import("bcryptjs")).default;
-    return bcrypt.compare(password, stored);
-  }
-  return false;
+  if (!stored.startsWith(`${PBKDF2_PREFIX}$`)) return false;
+  const [, iterations, salt, hash] = stored.split("$");
+  const n = Number(iterations);
+  if (!Number.isInteger(n) || n < 1 || !salt || !hash) return false;
+  return constantTimeEqual(await derive(password, fromHex(salt), n), hash);
 }
 
 /** 紛らわしい文字を除いたランダムパスワードを生成する。 */

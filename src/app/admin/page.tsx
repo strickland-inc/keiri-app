@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { getRepositories } from "@/repositories";
+import { currentSession } from "@/lib/session";
 import { formatJpDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -18,6 +20,8 @@ import { DeleteUserButton } from "./delete-user-button";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
+  const session = await currentSession();
+  if (session?.role !== "admin") redirect("/");
   const repos = await getRepositories();
   const users = await repos.users.list();
   const sorted = [...users].sort(

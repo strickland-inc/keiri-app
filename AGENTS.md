@@ -6,6 +6,6 @@
 - `page.tsx` の `params` / `searchParams` は Promise（`const { id } = await params`）。
 - `cookies()` は async（`await cookies()`）。
 - データ変更は Server Actions（`"use server"` → `revalidatePath` → `redirect`）。
-- API route は既存に合わせて `export const runtime = "nodejs"` を付ける。PDF はサーバーで描かない。
+- API route は既存に合わせて `export const runtime = "nodejs"` を付ける。
 
-規約は `CLAUDE.md`、デザインは `DESIGN.md` を参照。
+デザインは `DESIGN.md` を参照。

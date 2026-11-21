@@ -1,10 +1,9 @@
 /**
  * Repository factory。環境に応じて実体を選ぶ唯一の場所。
- * - Sheets の環境変数が揃っていれば Google Sheets バックエンド
- * - 揃っていなければ InMemory（デモデータ）
- * 商用化で DB に移すときも、ここに分岐を足すだけで UI/API は無改修。
+ * - 接続コード（KEIRI_CONNECTION）があれば、利用者のスプレッドシート
+ * - 無ければ InMemory（デモデータ。保存されない）
  */
-import { hasSheetsConfig } from "@/lib/config";
+import { hasConnection } from "@/lib/gateway";
 import { memoryRepositories } from "./memory";
 import type { Repositories } from "./types";
 
@@ -20,7 +19,7 @@ const globalForMemory = globalThis as {
 
 export async function getRepositories(): Promise<Repositories> {
   if (cached) return cached;
-  if (hasSheetsConfig()) {
+  if (hasConnection()) {
     const mod = await import("./sheets");
     cached = mod.sheetsRepositories;
   } else {

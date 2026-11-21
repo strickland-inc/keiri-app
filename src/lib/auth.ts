@@ -1,55 +1,77 @@
 /**
  * セッション。署名付き Cookie（HMAC-SHA256、Web Crypto なので Edge で動く）。
  * proxy.ts が import するため、Node 専用の依存を足さない。
- * 資格情報の検証は Node 専用の auth-server.ts にある。
+ * 資格情報の検証は auth-server.ts にある。
  */
+
+import {
+  getConnection,
+  hasConnection,
+  parseConnectionCode,
+} from "./gateway.ts";
 
 export const SESSION_COOKIE = "keiri_session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30日
 
-const DEV_SECRET = "dev-insecure-secret-change-me";
-const MIN_SECRET_LENGTH = 16;
+const DEMO_SECRET = "demo-insecure-secret";
+const DEMO_SESSION = { sub: "demo", role: "admin" } as const;
 
 /**
- * AUTH_SECRET に問題があれば、その理由を返す。問題がなければ null。
- * 本番（NODE_ENV=production）では 16 文字以上の AUTH_SECRET が必須。開発中は未設定でもよい。
- * 本番で未設定のまま動くと、誰でも Cookie を偽造してログインできてしまう。
+ * 接続コードを入れずに開発用に動かしているか。
+ * このときはデモデータで動き、ログインなしで管理者として扱う。本番では決してデモにしない。
  */
-export function authSecretProblem(): string | null {
-  if (process.env.NODE_ENV !== "production") return null;
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) {
-    return "AUTH_SECRET が未設定です。本番では 16 文字以上のランダムな値を設定してください（.env.example を参照）";
-  }
-  if (secret.length < MIN_SECRET_LENGTH) {
-    return `AUTH_SECRET が短すぎます（${secret.length} 文字）。16 文字以上のランダムな値を設定してください`;
-  }
-  return null;
+export function isDemoMode(): boolean {
+  return process.env.NODE_ENV !== "production" && !hasConnection();
 }
 
 /**
- * 本番で AUTH_SECRET に問題があるときに返す 500 の応答。問題がなければ null。
- * proxy.ts が全リクエストの最初に呼ぶ。Cloudflare Workers ではプロセスを止められないため、
- * ログイン画面と API も含めて、ここで断る（Node の next start は instrumentation でも止める）。
+ * 接続コード（KEIRI_CONNECTION）に問題があれば、その理由を返す。問題がなければ null。
+ * 本番で未設定のまま動くと、保存先が無いうえに、Cookie の署名に使う鍵も無い。
  */
-export function authSecretRejection(): Response | null {
-  const problem = authSecretProblem();
+export function connectionProblem(): string | null {
+  const code = process.env.KEIRI_CONNECTION;
+  if (!code) {
+    return process.env.NODE_ENV === "production"
+      ? "KEIRI_CONNECTION が未設定です。スプレッドシートのメニュー「keiri-app」で接続コードを発行して設定してください"
+      : null;
+  }
+  return parseConnectionCode(code)
+    ? null
+    : "KEIRI_CONNECTION の形が違います。スプレッドシートのメニュー「keiri-app」で接続コードを発行し直してください";
+}
+
+/**
+ * 接続コードに問題があるときに返す 500 の応答。問題がなければ null。
+ * proxy.ts が全リクエストの最初に呼ぶ。Cloudflare Workers ではプロセスを止められないため、
+ * ログイン画面と API も含めて、ここで断る。
+ */
+export function connectionRejection(): Response | null {
+  const problem = connectionProblem();
   if (!problem) return null;
   console.error(problem);
   return new Response(
-    "サーバーの設定が足りないため、利用できません。管理者は AUTH_SECRET を設定してください。",
+    "サーバーの設定が足りないため、利用できません。管理者は KEIRI_CONNECTION を設定してください。",
     { status: 500, headers: { "content-type": "text/plain; charset=utf-8" } },
   );
 }
 
 /**
- * Cookie の署名に使う秘密の値。開発中だけ、未設定でも固定値で動かす。
- * 本番で AUTH_SECRET に問題があれば例外を投げる（署名も検証もしない）。
+ * Cookie の署名に使う秘密の値。接続コードの鍵から決めるので、別の秘密を設定しなくてよい。
+ * 接続コードを作り直すと、全員がログアウトになる。
  */
 export function getSessionSecret(): string {
-  const problem = authSecretProblem();
+  const problem = connectionProblem();
   if (problem) throw new Error(problem);
-  return process.env.AUTH_SECRET || DEV_SECRET;
+  const connection = getConnection();
+  return connection ? `keiri-session:${connection.key}` : DEMO_SECRET;
+}
+
+/** 長さが同じなら全桁を比べる（途中で止めない）。 */
+function sameText(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 function bytesToB64url(bytes: Uint8Array): string {
@@ -103,14 +125,15 @@ export async function createSession(
 export async function verifySession(
   token: string | undefined,
 ): Promise<{ sub: string; role: string } | null> {
+  if (isDemoMode()) return DEMO_SESSION;
   if (!token) return null;
-  // 鍵が無い本番では、どのセッションも無効にする（fail closed）
-  if (authSecretProblem()) return null;
+  // 接続コードに問題があれば、どのセッションも無効にする（fail closed）
+  if (connectionProblem()) return null;
   const secret = getSessionSecret();
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
   const expected = await hmac(payload, secret);
-  if (sig !== expected) return null;
+  if (!sameText(sig, expected)) return null;
   try {
     const data = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload)));
     if (typeof data.exp === "number" && data.exp < Date.now()) return null;

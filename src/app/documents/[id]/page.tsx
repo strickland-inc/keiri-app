@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { buildDocumentPdfFilename } from "@/lib/documents/pdfFilename";
+import { sheetTabUrl } from "@/lib/gateway";
 import { DeleteDocumentButton } from "./delete-button";
 import { DocumentPreview } from "./document-preview";
 import { buildMessageTexts, deadlineLine } from "./message-texts";
@@ -32,6 +33,11 @@ export default async function DocumentDetailPage({
     repos.issuers.get(doc.issuerId),
   ]);
 
+  // 保存してある URL ではなく、今つないでいるスプレッドシートから組み立てる。
+  // スプレッドシートをコピーして使い始めると、保存してある URL はコピー元を指したままになるため。
+  const sheetUrl = doc.generatedSheetId
+    ? sheetTabUrl(doc.generatedSheetId)
+    : null;
   const summary = summarize(doc.items);
   const typeLabel = DOCUMENT_TYPE_LABELS[doc.type];
   const pdfFilename = party
@@ -64,9 +70,9 @@ export default async function DocumentDetailPage({
               <Icon name="content_copy" className="text-[16px]" />
               コピーして作成
             </Link>
-            {doc.sheetUrl && (
+            {sheetUrl && (
               <a
-                href={doc.sheetUrl}
+                href={sheetUrl}
                 target="_blank"
                 rel="noreferrer"
                 className={buttonVariants({ variant: "secondary", size: "sm" })}
@@ -75,15 +81,9 @@ export default async function DocumentDetailPage({
                 スプレッドシート
               </a>
             )}
-            <PdfDownloadButton
-              doc={doc}
-              issuer={issuer}
-              party={party}
-              filename={pdfFilename}
-              useSheetExport={Boolean(
-                doc.generatedSpreadsheetId && doc.generatedSheetId,
-              )}
-            />
+            {repos.backend === "sheets" && (
+              <PdfDownloadButton documentId={doc.id} />
+            )}
             <Link
               href={`/documents/${doc.id}/edit`}
               className={buttonVariants({ variant: "secondary", size: "sm" })}

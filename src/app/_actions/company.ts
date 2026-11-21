@@ -1,5 +1,7 @@
 "use server";
 
+import { assertSession } from "@/lib/session";
+
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getRepositories } from "@/repositories";
@@ -13,6 +15,7 @@ import {
  * 実在する会社の id のときだけ Cookie を書く（不正な値で全画面が空になるのを防ぐ）。
  */
 export async function switchCompany(formData: FormData): Promise<void> {
+  await assertSession();
   const companyId = String(formData.get("companyId") ?? "").trim();
   if (!companyId) return;
 

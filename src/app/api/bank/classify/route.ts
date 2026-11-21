@@ -1,3 +1,4 @@
+import { currentSession } from "@/lib/session";
 import type { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -31,6 +32,9 @@ const bodySchema = z.object({
 
 /** 取引を Jev で仕訳して保存し、照合できた請求書を入金済みにする。 */
 export async function POST(req: NextRequest): Promise<Response> {
+  if (!(await currentSession())) {
+    return new Response("Unauthorized", { status: 401 });
+  }
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return Response.json(

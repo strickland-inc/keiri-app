@@ -33,8 +33,7 @@ export function counterKey(issuerId: string, type: string): string {
  *    その場合 stored=0 になるが、発行済みの番号と衝突させてはいけない
  * 2. シートを手で触ってカウンターが実データより遅れることがある
  *
- * この規則は scripts/keiri.mjs の CLI 側にも同じ形で置いてある。
- * 片方だけ変えると、画面と CLI が同じ番号を二重に振る。
+ * 同じ規則が apps-script/Code.gs の nextSeq にもある。片方だけ変えると、同じ番号を二重に振る。
  */
 export function nextSequence(storedCounter: number, maxIssued: number): number {
   return Math.max(storedCounter, maxIssued, 0) + 1;

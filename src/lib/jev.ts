@@ -3,7 +3,7 @@
  * 認証は `TYPESAFE_API_KEY`（Authorization: Bearer）。モデルは `TYPESAFE_MODEL`（既定 jev-latest）。
  * Node ランタイム専用（サーバから呼ぶ）。
  */
-import { getConfig } from "./config.ts";
+import { getTypesafeConfig } from "./config.ts";
 
 const BASE_URL = "https://api.typesafe.ai";
 const TIMEOUT_MS = 30_000;
@@ -32,12 +32,10 @@ export class JevError extends Error {
 }
 
 function headers(): Record<string, string> {
-  const { TYPESAFE_API_KEY } = getConfig();
+  const { apiKey } = getTypesafeConfig();
   return {
     "Content-Type": "application/json",
-    ...(TYPESAFE_API_KEY
-      ? { Authorization: `Bearer ${TYPESAFE_API_KEY}` }
-      : {}),
+    ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
   };
 }
 
@@ -61,7 +59,7 @@ export async function askJevChoices(
   questions: Readonly<Record<string, ChoiceQuestion>>,
 ): Promise<Record<string, JevChoice>> {
   const body = JSON.stringify({
-    model: getConfig().TYPESAFE_MODEL || "jev-latest",
+    model: getTypesafeConfig().model || "jev-latest",
     state,
     questions: Object.fromEntries(
       Object.entries(questions).map(([name, q]) => [

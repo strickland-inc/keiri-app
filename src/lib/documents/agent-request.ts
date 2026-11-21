@@ -5,6 +5,7 @@
 import type { NewDocumentInput, DocumentRecord } from "../../domain/documents";
 import type { Party } from "../../domain/party";
 import type { Issuer } from "../../domain/issuer";
+import { isYen, LIMITS } from "../../domain/limits.ts";
 
 const DOCUMENT_TYPES = [
   "invoice",
@@ -41,17 +42,20 @@ function optionalDate(
 function parseItems(value: unknown): NewDocumentInput["items"] | Error {
   if (!Array.isArray(value) || value.length === 0)
     return new Error("明細（items）が必要です");
+  if (value.length > LIMITS.items)
+    return new Error(`明細は ${LIMITS.items} 件までです`);
   const items: NewDocumentInput["items"] = [];
   for (const [i, raw] of value.entries()) {
     if (!isRecord(raw)) return new Error(`明細 ${i + 1} の形式が不正です`);
-    const name = typeof raw.name === "string" ? raw.name.trim() : "";
+    const name =
+      typeof raw.name === "string" ? raw.name.trim().slice(0, LIMITS.line) : "";
     const quantity = Number(raw.quantity ?? 1);
     const unitPrice = Number(raw.unitPrice);
     const taxRate = Number(raw.taxRate ?? 0.1);
     if (!name) return new Error(`明細 ${i + 1} の品名（name）が必要です`);
     if (!Number.isFinite(quantity) || quantity <= 0)
       return new Error(`明細 ${i + 1} の数量が不正です`);
-    if (!Number.isInteger(unitPrice))
+    if (!isYen(unitPrice))
       return new Error(
         `明細 ${i + 1} の税抜単価（unitPrice）は整数の円で指定してください`,
       );

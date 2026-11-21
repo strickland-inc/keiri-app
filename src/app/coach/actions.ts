@@ -1,9 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { SESSION_COOKIE, verifySession } from "@/lib/auth";
+import { assertSession } from "@/lib/session";
 import {
   parsePlannedCommitmentsText,
   type MoneyPlan,
@@ -22,8 +21,7 @@ function amount(formData: FormData, name: string, required = false): number {
 }
 
 export async function saveMoneyPlan(formData: FormData): Promise<void> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!(await verifySession(token))) throw new Error("認証が必要です");
+  await assertSession();
 
   const month = String(formData.get("month") ?? "");
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))

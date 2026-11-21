@@ -1,5 +1,7 @@
 "use server";
 
+import { assertSession } from "@/lib/session";
+
 import { getRepositories } from "@/repositories";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -30,6 +32,7 @@ function parsePartyFromFormData(formData: FormData): NewPartyInput {
 }
 
 export async function createParty(formData: FormData): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   const input = parsePartyFromFormData(formData);
   await repos.parties.create(input);
@@ -41,6 +44,7 @@ export async function updateParty(
   id: string,
   formData: FormData,
 ): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   const input = parsePartyFromFormData(formData);
   await repos.parties.update(id, input);
@@ -50,6 +54,7 @@ export async function updateParty(
 }
 
 export async function removeParty(id: string): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   await repos.parties.remove(id);
   revalidatePath("/parties");

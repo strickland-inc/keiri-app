@@ -38,18 +38,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# 楽天明細取込（ログインセッション・個人情報CSV）
-scripts/.rakuten-session.json
-scripts/.rakuten-latest.csv
 *.csv
+
+# スクリプトが手元に残すログイン情報やトークン（楽天、freee など）
+scripts/.*.json
+scripts/.*.csv
 /dist/
 .vinext/
 .cloudflare/
 .dev.vars
 .dev.vars.*
-
-# freee API（アクセストークンのキャッシュ）
-scripts/.freee-token.json
 
 # clasp（自分用のスクリプト ID）
 .clasp.json

@@ -1,5 +1,7 @@
 "use server";
 
+import { assertSession } from "@/lib/session";
+
 import { getRepositories } from "@/repositories";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -40,6 +42,7 @@ function parseIssuerFromFormData(formData: FormData): NewIssuerInput {
 }
 
 export async function createIssuer(formData: FormData): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   const input = parseIssuerFromFormData(formData);
   await repos.issuers.create(input);
@@ -51,6 +54,7 @@ export async function updateIssuer(
   id: string,
   formData: FormData,
 ): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   const input = parseIssuerFromFormData(formData);
   await repos.issuers.update(id, input);
@@ -60,6 +64,7 @@ export async function updateIssuer(
 }
 
 export async function removeIssuer(id: string): Promise<void> {
+  await assertSession();
   const repos = await getRepositories();
   await repos.issuers.remove(id);
   revalidatePath("/issuers");

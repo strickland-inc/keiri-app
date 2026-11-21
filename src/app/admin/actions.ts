@@ -2,17 +2,8 @@
 
 import { getRepositories } from "@/repositories";
 import { hashPassword, generatePassword } from "@/lib/auth-server";
-import { verifySession, SESSION_COOKIE } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { assertAdmin } from "@/lib/session";
 import { revalidatePath } from "next/cache";
-
-async function assertAdmin(): Promise<void> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const session = await verifySession(token);
-  if (!session || session.role !== "admin") {
-    throw new Error("権限がありません");
-  }
-}
 
 export interface CreateUserState {
   ok: boolean;

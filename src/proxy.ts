@@ -1,25 +1,29 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { authSecretRejection, verifySession, SESSION_COOKIE } from "@/lib/auth";
+import { connectionRejection, verifySession, SESSION_COOKIE } from "@/lib/auth";
+
+/** ログイン前でも読める静的なファイル（アイコン、フォント、PWA の定義）。 */
+const PUBLIC_ASSET =
+  /^\/(?:fonts\/|icon-|apple-touch-icon\.png$|manifest\.webmanifest$|robots\.txt$)/;
 
 /**
  * Next.js 16 Proxy（旧 Middleware）。
  * 未ログインのアクセスは /login にリダイレクトする。
- * /login と認証API・静的アセットは素通り。
  */
 export async function proxy(request: NextRequest): Promise<Response> {
-  // 本番で AUTH_SECRET が無い・短いときは、ログイン画面と API も含めてすべて 500 で断る。
-  const rejected = authSecretRejection();
+  // 接続コードに問題があるときは、ログイン画面と API も含めてすべて 500 で断る。
+  const rejected = connectionRejection();
   if (rejected) return rejected;
 
   const { pathname } = request.nextUrl;
 
-  // /api/agent/v1/ は Bearer トークンで各 route が自前で認証するので、Cookie のガードは通さない。
+  // /api/v1/ は API トークンで各 route が自前で認証するので、Cookie のガードは通さない。
   const isPublic =
     pathname === "/login" ||
-    pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/agent/v1/") ||
-    pathname === "/robots.txt";
+    pathname === "/setup" ||
+    pathname === "/logout" ||
+    pathname.startsWith("/api/v1/") ||
+    PUBLIC_ASSET.test(pathname);
   if (isPublic) return NextResponse.next();
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;

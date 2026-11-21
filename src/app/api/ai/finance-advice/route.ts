@@ -1,3 +1,4 @@
+import { currentSession } from "@/lib/session";
 import { GoogleGenAI, Type } from "@google/genai";
 import { getRepositories } from "@/repositories";
 import { companyScope, loadCompanyContext } from "@/lib/active-company";
@@ -9,6 +10,9 @@ import { recentMonths, toIsoDate } from "@/domain/dates";
 export const runtime = "nodejs";
 
 export async function GET(): Promise<Response> {
+  if (!(await currentSession())) {
+    return new Response("Unauthorized", { status: 401 });
+  }
   if (!hasGeminiConfig()) {
     return Response.json(
       { error: "GEMINI_API_KEY が未設定のため AI 提案を利用できません" },

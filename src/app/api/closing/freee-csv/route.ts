@@ -1,3 +1,4 @@
+import { currentSession } from "@/lib/session";
 import { getRepositories } from "@/repositories";
 import { loadCompanyContext } from "@/lib/active-company";
 import { isValidClosingTerm, loadClosing } from "@/lib/closing/load-closing";
@@ -18,6 +19,9 @@ function isKind(v: string): v is Kind {
 }
 
 export async function GET(request: Request): Promise<Response> {
+  if (!(await currentSession())) {
+    return new Response("Unauthorized", { status: 401 });
+  }
   const url = new URL(request.url);
   const term = Number(url.searchParams.get("term"));
   const kind = url.searchParams.get("kind") ?? "";
