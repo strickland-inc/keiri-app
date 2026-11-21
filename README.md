@@ -135,6 +135,6 @@ Cloudflare は多少の超過を許しますが、短い時間に続けて画面
 
 ## 開発者向けの情報
 
-構成、コマンド、守ってほしい決まりは [CLAUDE.md](CLAUDE.md) と `.claude/rules/` に、環境変数は [.env.example](.env.example) に、デザインは [DESIGN.md](DESIGN.md) にあります。
+構成、コマンド、守ってほしい決まりは [CLAUDE.md](CLAUDE.md) に、環境変数は [.env.example](.env.example) に、デザインは [DESIGN.md](DESIGN.md) にあります。
 
 ライセンスは [MIT](LICENSE) です。
