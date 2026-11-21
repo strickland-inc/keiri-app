@@ -1025,3 +1025,41 @@ test("append は、右の列だけに値がある行の下ではなく、表の�
   );
   assert.equal(table.length, 20);
 });
+
+test("renderSheet は行の保存に失敗したら、作りかけのタブを消し、前のタブを残す", () => {
+  const gateway = gatewayWithTemplate();
+  const first = render(gateway);
+  const error = runFailing(gateway, {
+    op: "renderSheet",
+    template: "書式",
+    name: "請求書",
+    replaceGid: first.gid,
+    steps: [],
+    save: { tab: "無いタブ", id: "doc-1", row: ["doc-1"], fill: {} },
+  });
+  assert.equal(error.code, "not_found");
+  assert.deepEqual(gateway.spreadsheet.sheetNames(), [
+    "expenses",
+    "書式",
+    "請求書",
+  ]);
+  assert.equal(gidOf(gateway, "請求書"), Number(first.gid));
+});
+
+test("renderSheet の作り直しでは、付け直した名前で行を保存する", () => {
+  const gateway = gatewayWithTemplate();
+  const save = {
+    tab: "expenses",
+    id: "doc-1",
+    row: ["doc-1", "", ""],
+    fill: { 1: "gid", 2: "name" },
+  };
+  const first = render(gateway, { save });
+  const second = render(gateway, { save, replaceGid: first.gid });
+  assert.equal(second.name, "請求書");
+  assert.deepEqual(gateway.spreadsheet.sheet("expenses").values[1], [
+    "doc-1",
+    second.gid,
+    "請求書",
+  ]);
+});

@@ -35,7 +35,7 @@ const PDF_PARAMS = {
 
 /**
  * 帳票のタブを作り、書類の行を保存する（行が無ければ足し、あれば上書きする）。
- * 作り直すときは、前のタブを消してから作る。
+ * 作り直すときは、新しいタブを作って行を保存してから、前のタブを消す。
  */
 export async function saveDocumentWithSheet(params: {
   doc: DocumentRecord;

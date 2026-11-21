@@ -1,3 +1,4 @@
+import { currentSession } from "@/lib/session";
 import type { NextRequest } from "next/server";
 import { GoogleGenAI, Type } from "@google/genai";
 import { hasGeminiConfig, requireGeminiKey } from "@/lib/config";
@@ -6,6 +7,9 @@ import { EXPENSE_CATEGORIES } from "@/domain/expense";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest): Promise<Response> {
+  if (!(await currentSession())) {
+    return new Response("Unauthorized", { status: 401 });
+  }
   if (!hasGeminiConfig()) {
     return Response.json(
       { error: "GEMINI_API_KEY が未設定です" },

@@ -7,9 +7,9 @@ export function sitePath(next: string): string {
   const base = "http://keiri.invalid";
   try {
     const url = new URL(next, base);
-    return url.origin === base
-      ? `${url.pathname}${url.search}${url.hash}`
-      : "/";
+    const path = `${url.pathname}${url.search}${url.hash}`;
+    // "/.//example.com" のように、解決したあとで // から始まるパスは、ブラウザが別のサイトとして読む。
+    return url.origin === base && !path.startsWith("//") ? path : "/";
   } catch {
     return "/";
   }

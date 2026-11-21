@@ -114,9 +114,18 @@ function invoiceRegistrationLines(
   ];
 }
 
-/** 備考の行の高さ。行の数に合わせて伸ばし、少なくとも 96px にする。 */
+/** 備考欄（A〜H 列）の 1 行に収まる、全角のおおよその文字数。 */
+const NOTES_CHARS_PER_LINE = 45;
+
+/** 備考の行の高さ。改行と折り返しの行の数に合わせて伸ばし、少なくとも 96px にする。 */
 function notesHeight(notes: string): number {
-  const lines = notes ? notes.split("\n").length : 1;
+  const lines = notes
+    .split("\n")
+    .reduce(
+      (sum, line) =>
+        sum + Math.max(1, Math.ceil(line.length / NOTES_CHARS_PER_LINE)),
+      0,
+    );
   return Math.max(96, lines * 21 + 12);
 }
 

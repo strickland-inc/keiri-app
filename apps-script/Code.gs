@@ -321,6 +321,15 @@ const OPS = {
       spreadsheet.deleteSheet(sheet);
       throw error;
     }
+    // 名前を付け直す前に前のタブを消したいが、前のタブは行を保存できてから消す。
+    // そのため、名前を付け直すのは前のタブを消したあとにし、行には付け直した名前を保存し直す。
+    const made = describeSheet_(spreadsheet, sheet);
+    try {
+      if (call.save) saveWithSheet_(spreadsheet, call.save, made);
+    } catch (error) {
+      spreadsheet.deleteSheet(sheet);
+      throw error;
+    }
     if (call.replaceGid != null) {
       deleteGenerated_(spreadsheet, call.replaceGid, call.replaceName);
     }
@@ -329,18 +338,9 @@ const OPS = {
       !spreadsheet.getSheetByName(call.name)
     ) {
       sheet.setName(call.name);
+      made.name = sheet.getName();
+      if (call.save) saveWithSheet_(spreadsheet, call.save, made);
     }
-    const made = {
-      gid: String(sheet.getSheetId()),
-      name: sheet.getName(),
-      spreadsheetId: spreadsheet.getId(),
-      url:
-        "https://docs.google.com/spreadsheets/d/" +
-        spreadsheet.getId() +
-        "/edit#gid=" +
-        sheet.getSheetId(),
-    };
-    if (call.save) saveWithSheet_(spreadsheet, call.save, made);
     return made;
   },
 
@@ -467,7 +467,7 @@ function sameText_(a, b) {
   return diff === 0;
 }
 
-/** 表のタブ。書式のタブと、アプリが作った帳票のタブは、表として読み書きさせない。 */
+/** 表のタブ。書式のタブ（書式_ で始まる）は、表として読み書きさせない。 */
 function table_(spreadsheet, name) {
   if (String(name).indexOf(TEMPLATE_PREFIX) === 0) {
     throw new GatewayError_(
@@ -543,6 +543,20 @@ function writeText_(sheet, row, rows) {
     return line;
   });
   sheet.getRange(row, 1, values.length, width).setValues(values);
+}
+
+/** 作った帳票のタブの、アプリへ返す情報。 */
+function describeSheet_(spreadsheet, sheet) {
+  return {
+    gid: String(sheet.getSheetId()),
+    name: sheet.getName(),
+    spreadsheetId: spreadsheet.getId(),
+    url:
+      "https://docs.google.com/spreadsheets/d/" +
+      spreadsheet.getId() +
+      "/edit#gid=" +
+      sheet.getSheetId(),
+  };
 }
 
 /**

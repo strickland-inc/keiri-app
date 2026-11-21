@@ -1,3 +1,4 @@
+import { currentSession } from "@/lib/session";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { getRepositories } from "@/repositories";
@@ -14,6 +15,9 @@ const bodySchema = z.object({ text: z.string().min(1).max(5_000_000) });
  * 列の判定は見出しの語句で行い、決まらなければ Jev に聞く。
  */
 export async function POST(req: NextRequest): Promise<Response> {
+  if (!(await currentSession())) {
+    return new Response("Unauthorized", { status: 401 });
+  }
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return Response.json(

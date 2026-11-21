@@ -20,6 +20,11 @@ test("別のサイトを指すものは、トップページにする", () => {
     "\\\\evil.example",
     "https://evil.example/",
     "javascript:alert(1)",
+    "/.//evil.example",
+    "/a/..//evil.example",
+    "/..//evil.example",
+    "/%2e//evil.example",
+    "/./\\evil.example",
   ]) {
     assert.equal(sitePath(next), "/", JSON.stringify(next));
   }

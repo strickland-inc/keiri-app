@@ -404,3 +404,14 @@ test("備考の行は、行の数に合わせて高くなる", () => {
   assert.equal(height(short), 96);
   assert.ok(height(long) > 96);
 });
+
+test("備考の行は、1 行が長くて折り返す分も高くなる", () => {
+  const short = plan(makeDoc({ notes: "短い備考" }));
+  const long = plan(makeDoc({ notes: "あ".repeat(400) }));
+  const height = (result: DocumentSheetPlan): number => {
+    const step = result.steps.find((s) => s.do === "rowHeight");
+    return step && step.do === "rowHeight" ? step.px : 0;
+  };
+  assert.equal(height(short), 96);
+  assert.ok(height(long) > 96);
+});

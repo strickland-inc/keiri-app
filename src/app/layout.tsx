@@ -49,7 +49,11 @@ async function loadCompaniesForShell(): Promise<{
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const { session, stale } = await loadSession();
+  // スプレッドシートに届かないときもログイン画面を描き、そこで理由を見せる。
+  const { session, stale } = await loadSession().catch(() => ({
+    session: null,
+    stale: false,
+  }));
   // 消されたユーザーの Cookie は、ログアウトの経路で片付けて、ログイン画面へ戻す。
   if (stale) redirect("/logout");
   // ログイン前（ログイン画面）は会社を読まない。スプレッドシートへの通信を増やさないため。
