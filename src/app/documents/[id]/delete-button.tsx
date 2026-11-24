@@ -8,7 +8,7 @@ export function DeleteDocumentButton({ id }: { id: string }) {
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
-    if (!confirm("この書類を削除しますか？この操作は取り消せません。")) return;
+    if (!confirm("この書類を削除しますか？")) return;
     startTransition(() => removeDocument(id));
   }
 

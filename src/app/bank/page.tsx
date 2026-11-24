@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { BankImport } from "./bank-import";
 import { AccountSelect, RowButtons } from "./row-actions";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function BankPage({
 }: {
   searchParams: Promise<{ review?: string }>;
 }) {
+  await requirePageSession();
   const { review } = await searchParams;
   const reviewOnly = review === "1";
 
@@ -65,7 +67,7 @@ export default async function BankPage({
   const tabs = [
     { label: "すべて", href: "/bank", active: !reviewOnly },
     {
-      label: `要確認（${reviewCount}）`,
+      label: `要確認 ${reviewCount}`,
       href: "/bank?review=1",
       active: reviewOnly,
     },
@@ -73,10 +75,7 @@ export default async function BankPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader
-        title="銀行明細"
-        description="銀行の明細 CSV を取り込むと、勘定科目を自動で仕訳し、入金は請求書と照合します。結果は会計帳簿（貸借対照表・損益計算書など）に反映されます。"
-      />
+      <PageHeader title="銀行明細" />
 
       <BankImport />
 
@@ -87,7 +86,6 @@ export default async function BankPage({
           <Stat
             label="要確認"
             value={`${reviewCount} 件`}
-            hint="Jev の確信度が低い取引です。科目を確認してください"
             tone={reviewCount > 0 ? "warning" : "default"}
           />
         </div>
@@ -174,7 +172,9 @@ export default async function BankPage({
           </Table>
           {(reviewOnly ? reviewCount : all.length) > MAX_ROWS && (
             <p className="border-t border-line px-4 py-3 text-xs text-ink-muted">
-              新しい順に {MAX_ROWS} 件を表示しています。
+              <span className="tabular">
+                {MAX_ROWS} / {reviewOnly ? reviewCount : all.length} 件
+              </span>
             </p>
           )}
         </TableCard>

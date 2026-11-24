@@ -1,6 +1,7 @@
 "use server";
 
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -118,7 +119,7 @@ const saveSchema = z
 
 /** プレビューで見せた行を経費として保存する。bulkCreate は 1 回だけ呼ぶ。 */
 export async function saveExpenseCsv(rows: unknown): Promise<SaveResult> {
-  await assertSession();
+  const session = await assertSession();
   const parsed = saveSchema.safeParse(rows);
   if (!parsed.success) {
     return {
@@ -151,6 +152,12 @@ export async function saveExpenseCsv(rows: unknown): Promise<SaveResult> {
         source: "CSV取込",
         note: "",
       })),
+    );
+    await recordAudit(
+      session,
+      "expense.imported",
+      { type: "expense" },
+      `経費 ${fresh.length} 件を CSV から取り込み`,
     );
   }
   revalidatePath("/expenses");

@@ -1,4 +1,5 @@
-import { authorizeApi, unauthorized } from "@/lib/api-auth";
+import { authenticateApi, authorizeApi, unauthorized } from "@/lib/api-auth";
+import { recordAudit } from "@/lib/audit";
 import { createDocument } from "@/lib/documents/service";
 import { parseAgentDocumentRequest } from "@/lib/documents/agent-request";
 import { getRepositories } from "@/repositories";
@@ -62,7 +63,8 @@ export async function GET(request: Request): Promise<Response> {
  */
 export async function POST(request: Request): Promise<Response> {
   const repos = await getRepositories();
-  if (!(await authorizeApi(request, repos))) return unauthorized();
+  const token = await authenticateApi(request, repos);
+  if (!token) return unauthorized();
   if (
     request.headers.get("content-type")?.split(";", 1)[0] !== "application/json"
   ) {
@@ -99,6 +101,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";
     const results = [];
+    const createdDocs: { id: string; number: string }[] = [];
     for (const item of parsed) {
       if (!item.ok) {
         results.push({ index: item.index, ok: false, error: item.error });
@@ -118,6 +121,7 @@ export async function POST(request: Request): Promise<Response> {
         });
       } else {
         const doc = await createDocument(repos, item.input);
+        createdDocs.push({ id: doc.id, number: doc.number });
         results.push({
           index: item.index,
           ok: true,
@@ -127,6 +131,17 @@ export async function POST(request: Request): Promise<Response> {
           url: `/documents/${doc.id}`,
         });
       }
+    }
+    if (!dryRun && createdDocs.length > 0) {
+      const only = createdDocs.length === 1 ? createdDocs[0] : undefined;
+      await recordAudit(
+        { tokenName: token.name },
+        "document.created",
+        { type: "document", id: only?.id },
+        only
+          ? `API で書類 ${only.number} を作成`
+          : `API で書類 ${createdDocs.length} 件を作成`,
+      );
     }
     return Response.json({ ok: true, dryRun, results }, { headers: NO_STORE });
   } catch {

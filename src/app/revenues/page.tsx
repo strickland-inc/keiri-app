@@ -23,6 +23,7 @@ import { firstParam, type SearchParamValue } from "@/lib/search-params";
 import { RevenueForm } from "./revenue-form";
 import { DeleteRevenueButton } from "./delete-button";
 import { createRevenue } from "./actions";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export default async function RevenuesPage({
 }: {
   searchParams: Promise<RevenueSearchParams>;
 }) {
+  await requirePageSession();
   const sp = await searchParams;
   const month = firstParam(sp.month);
   const isMonthFilter = /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
@@ -78,10 +80,7 @@ export default async function RevenuesPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader
-        title="売上"
-        description="帳票の無い入金（通帳から拾った売上など）を会社ごとに記録します。"
-      />
+      <PageHeader title="売上" />
 
       <SectionCard title="売上を追加">
         <RevenueForm parties={parties} action={createRevenue} />
@@ -145,7 +144,6 @@ export default async function RevenuesPage({
               ? "条件に一致する売上がありません"
               : "売上がまだありません"
           }
-          description="上のフォームから通帳の入金を記録してください。"
         />
       ) : (
         <TableCard>

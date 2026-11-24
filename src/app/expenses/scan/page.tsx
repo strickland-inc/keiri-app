@@ -316,9 +316,9 @@ export default function ScanPage(): React.ReactElement {
 
   const statusMessages: Record<ScanStatus, string> = {
     init: "カメラを起動しています...",
-    scanning: "領収書を枠に収めてください",
+    scanning: "スキャン中",
     analyzing: "読み取り中...",
-    confirm: "これでよければ登録",
+    confirm: "確認",
     error: errorMsg ?? "エラーが発生しました",
   };
 

@@ -9,7 +9,7 @@ export function DeleteRevenueButton({ id }: { id: string }) {
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
-    if (!confirm("この売上を削除しますか？この操作は取り消せません。")) return;
+    if (!confirm("この売上を削除しますか？")) return;
     startTransition(() => removeRevenue(id));
   }
 

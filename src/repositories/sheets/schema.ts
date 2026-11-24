@@ -1,7 +1,15 @@
 import type { DocumentRecord, LineItem } from "@/domain/documents";
 import type { Party } from "@/domain/party";
 import type { Issuer } from "@/domain/issuer";
-import type { User, UserRole } from "@/domain/user";
+import type { UserRole, UserStatus } from "@/domain/user";
+import type { Invite, InviteKind } from "@/domain/invite";
+import type { AuditActorType, AuditEntry } from "@/domain/audit";
+import type {
+  AccessRow,
+  ProfileRow,
+  SecurityRow,
+  UserRow,
+} from "../user-merge";
 import {
   type Expense,
   type ExpenseCategory,
@@ -29,6 +37,13 @@ export const SHEET_NAMES = {
   bankTransactions: "bank_transactions",
   revenues: "revenues",
   apiTokens: "api_tokens",
+  userProfiles: "user_profiles",
+  userSecurity: "user_security",
+  userAccess: "user_access",
+  authCounters: "auth_counters",
+  sessionVersions: "session_versions",
+  invites: "invites",
+  auditLog: "audit_log",
 } as const;
 
 export const DOCUMENTS_HEADERS = [
@@ -287,7 +302,7 @@ export const USERS_HEADERS = [
   "updatedAt",
 ] as const;
 
-export function userToRow(user: User): string[] {
+export function userToRow(user: UserRow): string[] {
   return [
     user.id,
     user.loginId,
@@ -298,7 +313,7 @@ export function userToRow(user: User): string[] {
   ];
 }
 
-export function rowToUser(row: string[]): User {
+export function rowToUser(row: string[]): UserRow {
   const g = (i: number): string => row[i] ?? "";
   const role: UserRole = g(3) === "admin" ? "admin" : "user";
   return {
@@ -308,6 +323,180 @@ export function rowToUser(row: string[]): User {
     role,
     createdAt: g(4),
     updatedAt: g(5),
+  };
+}
+
+// ── UserProfile（Cookie だけで書ける）──────────────────────────────────────────
+
+export const USER_PROFILES_HEADERS = [
+  "id",
+  "displayName",
+  "updatedAt",
+] as const;
+
+export function profileToRow(row: ProfileRow): string[] {
+  return [row.id, row.displayName, row.updatedAt];
+}
+
+export function rowToProfile(row: string[]): ProfileRow {
+  const g = (i: number): string => row[i] ?? "";
+  return { id: g(0), displayName: g(1), updatedAt: g(2) };
+}
+
+// ── UserSecurity（パスワードの再入力・リンク・接続コードを通した操作だけが書く）────
+
+export const USER_SECURITY_HEADERS = [
+  "id",
+  "passwordHash",
+  "passwordChangedAt",
+  "totpSecret",
+  "totpEnabledAt",
+  "recoveryCodes",
+  "updatedAt",
+] as const;
+
+export function securityToRow(row: SecurityRow): string[] {
+  return [
+    row.id,
+    row.passwordHash,
+    row.passwordChangedAt,
+    row.totpSecret,
+    row.totpEnabledAt,
+    row.recoveryCodes.join(","),
+    row.updatedAt,
+  ];
+}
+
+export function rowToSecurity(row: string[]): SecurityRow {
+  const g = (i: number): string => row[i] ?? "";
+  return {
+    id: g(0),
+    passwordHash: g(1),
+    passwordChangedAt: g(2),
+    totpSecret: g(3),
+    totpEnabledAt: g(4),
+    recoveryCodes: g(5)
+      .split(",")
+      .map((code) => code.trim())
+      .filter(Boolean),
+    updatedAt: g(6),
+  };
+}
+
+// ── UserAccess（管理者だけが書く）──────────────────────────────────────────────
+
+export const USER_ACCESS_HEADERS = ["id", "status", "updatedAt"] as const;
+
+export function accessToRow(row: AccessRow): string[] {
+  return [row.id, row.status, row.updatedAt];
+}
+
+export function rowToAccess(row: string[]): AccessRow {
+  const g = (i: number): string => row[i] ?? "";
+  const status: UserStatus = g(1) === "disabled" ? "disabled" : "active";
+  return { id: g(0), status, updatedAt: g(2) };
+}
+
+// ── SessionVersions（nextSeq だけで増やす版数）────────────────────────────────
+
+export const SESSION_VERSIONS_HEADERS = ["key", "seq"] as const;
+
+// ── AuthCounter ───────────────────────────────────────────────────────────────
+
+export const AUTH_COUNTERS_HEADERS = ["key", "seq"] as const;
+
+// ── Invite ────────────────────────────────────────────────────────────────────
+
+export const INVITES_HEADERS = [
+  "id",
+  "kind",
+  "tokenHash",
+  "userId",
+  "role",
+  "note",
+  "createdBy",
+  "createdAt",
+  "expiresAt",
+  "usedAt",
+] as const;
+
+export function inviteToRow(invite: Invite): string[] {
+  return [
+    invite.id,
+    invite.kind,
+    invite.tokenHash,
+    invite.userId,
+    invite.role,
+    invite.note,
+    invite.createdBy,
+    invite.createdAt,
+    invite.expiresAt,
+    invite.usedAt,
+  ];
+}
+
+export function rowToInvite(row: string[]): Invite {
+  const g = (i: number): string => row[i] ?? "";
+  const kind: InviteKind = g(1) === "reset" ? "reset" : "invite";
+  return {
+    id: g(0),
+    kind,
+    tokenHash: g(2),
+    userId: g(3),
+    role: g(4) === "admin" ? "admin" : "user",
+    note: g(5),
+    createdBy: g(6),
+    createdAt: g(7),
+    expiresAt: g(8),
+    usedAt: g(9),
+  };
+}
+
+// ── AuditLog ──────────────────────────────────────────────────────────────────
+
+export const AUDIT_LOG_HEADERS = [
+  "id",
+  "at",
+  "actorType",
+  "actorId",
+  "actorName",
+  "action",
+  "targetType",
+  "targetId",
+  "summary",
+  "ip",
+] as const;
+
+export function auditToRow(entry: AuditEntry): string[] {
+  return [
+    entry.id,
+    entry.at,
+    entry.actorType,
+    entry.actorId,
+    entry.actorName,
+    entry.action,
+    entry.targetType,
+    entry.targetId,
+    entry.summary,
+    entry.ip,
+  ];
+}
+
+export function rowToAudit(row: string[]): AuditEntry {
+  const g = (i: number): string => row[i] ?? "";
+  const actorType: AuditActorType =
+    g(2) === "token" ? "token" : g(2) === "system" ? "system" : "user";
+  return {
+    id: g(0),
+    at: g(1),
+    actorType,
+    actorId: g(3),
+    actorName: g(4),
+    action: g(5),
+    targetType: g(6),
+    targetId: g(7),
+    summary: g(8),
+    ip: g(9),
   };
 }
 
@@ -544,4 +733,11 @@ export const TABLES: ReadonlyArray<{
   { name: SHEET_NAMES.settings, header: SETTINGS_HEADERS },
   { name: SHEET_NAMES.users, header: USERS_HEADERS },
   { name: SHEET_NAMES.apiTokens, header: API_TOKENS_HEADERS },
+  { name: SHEET_NAMES.userProfiles, header: USER_PROFILES_HEADERS },
+  { name: SHEET_NAMES.userSecurity, header: USER_SECURITY_HEADERS },
+  { name: SHEET_NAMES.userAccess, header: USER_ACCESS_HEADERS },
+  { name: SHEET_NAMES.authCounters, header: AUTH_COUNTERS_HEADERS },
+  { name: SHEET_NAMES.sessionVersions, header: SESSION_VERSIONS_HEADERS },
+  { name: SHEET_NAMES.invites, header: INVITES_HEADERS },
+  { name: SHEET_NAMES.auditLog, header: AUDIT_LOG_HEADERS },
 ];

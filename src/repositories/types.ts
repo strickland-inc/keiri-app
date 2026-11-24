@@ -11,7 +11,15 @@ import type {
 } from "@/domain/documents";
 import type { NewPartyInput, Party } from "@/domain/party";
 import type { Issuer, NewIssuerInput } from "@/domain/issuer";
-import type { User, NewUserInput } from "@/domain/user";
+import type { User, NewUserInput, UserRole } from "@/domain/user";
+import type { Invite, NewInviteInput } from "@/domain/invite";
+import type { AuditEntry, AuditFilter, NewAuditEntry } from "@/domain/audit";
+import type {
+  AccessPatch,
+  ProfilePatch,
+  SecurityPatch,
+  VersionSide,
+} from "./user-merge";
 import type { Expense, NewExpenseInput } from "@/domain/expense";
 import type { MerchantRule, NewMerchantRule } from "@/domain/merchant";
 import type { BankTransaction, NewBankTransactionInput } from "@/domain/bank";
@@ -67,12 +75,71 @@ export interface IssuerRepository {
   remove(id: string): Promise<void>;
 }
 
+/**
+ * ユーザー。5 つのタブを合成して返す。書き込みは書き手ごとに分かれている
+ * （user-merge.ts の冒頭を参照）。どの書き込みも、ほかの書き手の行は書かない。
+ */
 export interface UserRepository {
   list(): Promise<User[]>;
   get(id: string): Promise<User | null>;
+  /** 大文字小文字を区別せずに探す。 */
   findByLoginId(loginId: string): Promise<User | null>;
+  /** users と user_profiles と user_security に行を作る。 */
   create(input: NewUserInput): Promise<User>;
+  /** すべてのタブと、版数の行から消す。 */
   remove(id: string): Promise<void>;
+  /** 表示名（Cookie だけで書ける）。user_profiles だけを書く。 */
+  updateProfile(id: string, patch: ProfilePatch): Promise<User>;
+  /**
+   * パスワード・2段階認証（user_security）。パスワードの再入力、招待や再設定のリンク、接続コードのどれかを
+   * 通した操作と、保留 Cookie を持つログインの途中の操作だけが呼ぶ。bumpSession で本人の側の版を上げる。
+   */
+  updateSecurity(id: string, patch: SecurityPatch): Promise<User>;
+  /** 状態（user_access）。管理者だけ（と /recover）。bumpSession で管理者の側の版を上げる。 */
+  updateAccess(id: string, patch: AccessPatch): Promise<User>;
+  /** 役割。users の行だけを書き、user_access は書き直さない。bumpSession で管理者の側の版を上げる。 */
+  updateRole(
+    id: string,
+    role: UserRole,
+    options?: { bumpSession?: boolean },
+  ): Promise<User>;
+  /** 管理者による 2段階認証のリセット。user_security の例外の書き込みで、管理者の側の版を上げる。 */
+  resetTotp(id: string): Promise<User>;
+  /** 版数だけを上げる（「すべての端末からログアウト」など）。必ず増えるので、古い書き込みで戻せない。 */
+  bumpSessionVersion(id: string, side: VersionSide): Promise<void>;
+}
+
+export interface InviteRepository {
+  list(): Promise<Invite[]>;
+  get(id: string): Promise<Invite | null>;
+  findByTokenHash(tokenHash: string): Promise<Invite | null>;
+  create(input: NewInviteInput): Promise<Invite>;
+  markUsed(id: string, usedAt: string): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
+export interface AuditRepository {
+  append(entry: NewAuditEntry): Promise<void>;
+  /** 新しい順。最大 500 件。 */
+  list(filter?: AuditFilter): Promise<AuditEntry[]>;
+}
+
+/** 窓口の nextSeq だけで増やす回数と、一度きりの操作の印。 */
+export interface AuthCounterRepository {
+  /** 鍵ごとの今の値（無ければ 0）と、消してよい古い `fail:` の鍵。 */
+  inspect(
+    keys: string[],
+    nowMs: number,
+  ): Promise<{ values: number[]; stale: string[] }>;
+  /** max(保存値, floor) + 1 を保存して返す。 */
+  next(key: string, floor?: number): Promise<number>;
+  /** 複数の鍵を 1 回の通信で増やす。 */
+  nextMany(keys: string[]): Promise<number[]>;
+  deleteMany(keys: string[]): Promise<void>;
+  /** 鍵の先頭が一致する行を消す（/recover のロック解除）。 */
+  deleteByPrefix(prefixes: string[]): Promise<void>;
+  /** 古い窓の `fail:` の行を、最大 20 行まで消す。 */
+  prune(nowMs: number): Promise<void>;
 }
 
 export interface ExpenseFilter extends CompanyScope {
@@ -141,6 +208,9 @@ export interface Repositories {
   bankTransactions: BankTransactionRepository;
   revenues: RevenueRepository;
   apiTokens: ApiTokenRepository;
+  invites: InviteRepository;
+  audit: AuditRepository;
+  authCounters: AuthCounterRepository;
   /** 現在のバックエンド種別（UIの表示用）。 */
   backend: "memory" | "sheets";
 }

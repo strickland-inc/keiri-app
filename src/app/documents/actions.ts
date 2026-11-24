@@ -1,12 +1,15 @@
 "use server";
 
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
+import { describeDocument, documentLabel } from "@/app/_actions/audit-summary";
 
 import { getRepositories } from "@/repositories";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   DOCUMENT_STATUSES,
+  DOCUMENT_STATUS_LABELS,
   isDocumentType,
   type DocumentStatus,
   type NewDocumentInput,
@@ -95,7 +98,7 @@ function parseInputFromFormData(formData: FormData): NewDocumentInput {
 }
 
 export async function createDocument(formData: FormData): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const parsed = parseInputFromFormData(formData);
   const input: NewDocumentInput = {
@@ -104,6 +107,12 @@ export async function createDocument(formData: FormData): Promise<void> {
   };
   if (!input.issuerId) throw new Error("会社が登録されていません");
   const doc = await createDocumentRecord(repos, input);
+  await recordAudit(
+    session,
+    "document.created",
+    { type: "document", id: doc.id },
+    `${describeDocument(doc, (await repos.parties.get(doc.partyId))?.name)}を作成`,
+  );
   revalidatePath("/documents");
   revalidatePath(`/documents/${doc.id}`);
   revalidatePath("/");
@@ -114,7 +123,7 @@ export async function updateDocument(
   id: string,
   formData: FormData,
 ): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const parsed = parseInputFromFormData(formData);
   // 編集では所属会社を動かさない。既存の帳票が別の帳簿へ移ると採番の連番が崩れる。
@@ -124,7 +133,13 @@ export async function updateDocument(
     issuerId:
       existing?.issuerId ?? (await resolveIssuerId(repos, parsed.issuerId)),
   };
-  await updateDocumentRecord(repos, id, input);
+  const updated = await updateDocumentRecord(repos, id, input);
+  await recordAudit(
+    session,
+    "document.updated",
+    { type: "document", id },
+    `${describeDocument(updated, (await repos.parties.get(updated.partyId))?.name)}を更新`,
+  );
   revalidatePath("/documents");
   revalidatePath(`/documents/${id}`);
   revalidatePath("/");
@@ -132,9 +147,16 @@ export async function updateDocument(
 }
 
 export async function removeDocument(id: string): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
+  const existing = await repos.documents.get(id);
   await removeDocumentRecord(repos, id);
+  await recordAudit(
+    session,
+    "document.deleted",
+    { type: "document", id },
+    existing ? `${documentLabel(existing)}を削除` : "書類を削除",
+  );
   revalidatePath("/documents");
   revalidatePath("/");
   redirect("/documents");
@@ -144,11 +166,17 @@ export async function updateDocumentStatus(
   id: string,
   status: DocumentStatus,
 ): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   if (!DOCUMENT_STATUSES.includes(status))
     throw new Error("書類の状態が不正です");
   const repos = await getRepositories();
-  await repos.documents.update(id, { status });
+  const updated = await repos.documents.update(id, { status });
+  await recordAudit(
+    session,
+    "document.status_changed",
+    { type: "document", id },
+    `${documentLabel(updated)}の状態を「${DOCUMENT_STATUS_LABELS[status]}」に変更`,
+  );
   revalidatePath(`/documents/${id}`);
   revalidatePath("/documents");
   revalidatePath("/");

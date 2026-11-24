@@ -4,6 +4,7 @@ import { updateDocument } from "@/app/documents/actions";
 import { PageHeader } from "@/components/ui/page-header";
 import { loadCompanyContext } from "@/lib/active-company";
 import { DocumentForm } from "@/app/documents/new/document-form";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export default async function EditDocumentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePageSession();
   const { id } = await params;
   const repos = await getRepositories();
   const [doc, parties, company] = await Promise.all([
@@ -30,10 +32,7 @@ export default async function EditDocumentPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader
-        title="書類を編集"
-        description={`${doc.number} の内容を変更します。`}
-      />
+      <PageHeader title={`書類を編集 ${doc.number}`} />
 
       <DocumentForm
         parties={parties}

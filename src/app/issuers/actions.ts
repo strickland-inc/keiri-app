@@ -1,6 +1,7 @@
 "use server";
 
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 
 import { getRepositories } from "@/repositories";
 import { revalidatePath } from "next/cache";
@@ -42,10 +43,16 @@ function parseIssuerFromFormData(formData: FormData): NewIssuerInput {
 }
 
 export async function createIssuer(formData: FormData): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const input = parseIssuerFromFormData(formData);
-  await repos.issuers.create(input);
+  const created = await repos.issuers.create(input);
+  await recordAudit(
+    session,
+    "issuer.created",
+    { type: "issuer", id: created.id },
+    `発行元「${input.name}」を登録`,
+  );
   revalidatePath("/issuers");
   redirect("/issuers");
 }
@@ -54,19 +61,32 @@ export async function updateIssuer(
   id: string,
   formData: FormData,
 ): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const input = parseIssuerFromFormData(formData);
   await repos.issuers.update(id, input);
+  await recordAudit(
+    session,
+    "issuer.updated",
+    { type: "issuer", id },
+    `発行元「${input.name}」を更新`,
+  );
   revalidatePath("/issuers");
   revalidatePath(`/issuers/${id}`);
   redirect("/issuers");
 }
 
 export async function removeIssuer(id: string): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
+  const existing = await repos.issuers.get(id);
   await repos.issuers.remove(id);
+  await recordAudit(
+    session,
+    "issuer.deleted",
+    { type: "issuer", id },
+    `発行元「${existing?.name ?? id}」を削除`,
+  );
   revalidatePath("/issuers");
   redirect("/issuers");
 }

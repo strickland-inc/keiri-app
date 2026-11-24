@@ -38,6 +38,7 @@ import { CategorySelect } from "./category-select";
 import { DeleteExpenseButton } from "./delete-button";
 import { ExpenseForm } from "./expense-form";
 import { ExpenseSearchForm } from "./expense-search-form";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,7 @@ export default async function ExpensesPage({
 }: {
   searchParams: Promise<ExpenseSearchParams>;
 }) {
+  await requirePageSession();
   const sp = await searchParams;
   // 月の選択肢は新しい順に並べる
   const months = recentMonths(24).reverse();
@@ -170,11 +172,6 @@ export default async function ExpensesPage({
             isSearchActive
               ? "条件に一致する経費がありません"
               : `${periodLabel}の経費がありません`
-          }
-          description={
-            isSearchActive
-              ? "キーワードや絞り込み条件を変えて、もう一度お試しください。"
-              : "上のフォームか、レシートのスキャンで追加できます。"
           }
           action={
             isSearchActive && (

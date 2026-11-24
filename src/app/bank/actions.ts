@@ -1,6 +1,7 @@
 "use server";
 
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 
 import { revalidatePath } from "next/cache";
 import { getRepositories } from "@/repositories";
@@ -16,7 +17,7 @@ export async function changeBankAccount(
   id: string,
   account: string,
 ): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const tx = await repos.bankTransactions.get(id);
   if (!tx) throw new Error("明細が見つかりません");
@@ -36,24 +37,42 @@ export async function changeBankAccount(
     matchedDocumentId:
       account === RECEIVABLE ? tx.matchedDocumentId : undefined,
   });
+  await recordAudit(
+    session,
+    "bank.classified",
+    { type: "bank_transaction", id },
+    `銀行明細の勘定科目を「${tx.account}」から「${account}」に変更（${tx.date}、${tx.amount.toLocaleString("ja-JP")} 円）`,
+  );
   refresh();
 }
 
 /** 判断が正しいことを確認した。 */
 export async function confirmBankTransaction(id: string): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   await repos.bankTransactions.update(id, {
     needsReview: false,
     method: "manual",
     confidence: 1,
   });
+  await recordAudit(
+    session,
+    "bank.confirmed",
+    { type: "bank_transaction", id },
+    "銀行明細の仕訳を確認済みにした",
+  );
   refresh();
 }
 
 export async function removeBankTransaction(id: string): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   await repos.bankTransactions.remove(id);
+  await recordAudit(
+    session,
+    "bank.deleted",
+    { type: "bank_transaction", id },
+    "銀行明細を削除",
+  );
   refresh();
 }

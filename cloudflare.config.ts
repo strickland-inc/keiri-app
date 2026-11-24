@@ -11,12 +11,13 @@ import { bindings, defineConfig, defineWorker } from "cf/config";
  */
 
 /**
- * アプリが読む秘密の値の名前。必須は接続コード（KEIRI_CONNECTION）だけで、残りは任意の API キー。
+ * アプリが読む秘密の値の名前。必須は接続コード（KEIRI_CONNECTION）だけで、残りは任意（パスワードの反復回数と API キー）。
  * 値のある名前だけを宣言する。値は、環境変数、.env.local（ビルドのときに読み込まれる）、
  * .dev.vars（ローカルで Workers として動かすとき）のどれかにあればよい。
  */
 const SECRET_NAMES = [
   "KEIRI_CONNECTION",
+  "KEIRI_PASSWORD_ITERATIONS",
   "GEMINI_API_KEY",
   "TYPESAFE_API_KEY",
   "TYPESAFE_MODEL",

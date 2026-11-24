@@ -32,20 +32,29 @@ export async function hashApiToken(token: string): Promise<string> {
 }
 
 /**
- * Authorization ヘッダーの Bearer トークンが、発行済みのトークンと一致するか。
+ * Authorization ヘッダーの Bearer トークンに合う、発行済みトークンの id と名前。合わなければ null。
  * 形の違うトークンは、スプレッドシートを読まずに断る。
  */
+export async function authenticateApi(
+  request: Request,
+  repos: Pick<Repositories, "apiTokens">,
+): Promise<{ id: string; name: string } | null> {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return null;
+  const token = authorization.slice("Bearer ".length);
+  if (!TOKEN_PATTERN.test(token)) return null;
+  const hash = await hashApiToken(token);
+  const tokens = await repos.apiTokens.list();
+  const found = tokens.find((stored) => stored.tokenHash === hash);
+  return found ? { id: found.id, name: found.name } : null;
+}
+
+/** トークンが、発行済みのトークンと一致するか。 */
 export async function authorizeApi(
   request: Request,
   repos: Pick<Repositories, "apiTokens">,
 ): Promise<boolean> {
-  const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) return false;
-  const token = authorization.slice("Bearer ".length);
-  if (!TOKEN_PATTERN.test(token)) return false;
-  const hash = await hashApiToken(token);
-  const tokens = await repos.apiTokens.list();
-  return tokens.some((stored) => stored.tokenHash === hash);
+  return (await authenticateApi(request, repos)) !== null;
 }
 
 export function unauthorized(): Response {

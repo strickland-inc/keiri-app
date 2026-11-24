@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { Icon } from "@/components/ui/icon";
 import { Card, CardHeader } from "@/components/ui/card";
 import { LinkTabs } from "@/components/ui/tabs";
 import type { FiscalYear } from "@/domain/accounting";
@@ -30,20 +29,6 @@ export function FiscalYearTabs({
         active: fy.year === current.year,
       }))}
     />
-  );
-}
-
-/** 自動仕訳の前提を示す注記。 */
-export function AccountingNote() {
-  return (
-    <p className="flex items-start gap-2 text-xs leading-relaxed text-ink-muted">
-      <Icon name="info" className="mt-px text-[16px]" />
-      <span>
-        請求書（下書き・無効を除く）・経費・銀行明細から自動で仕訳を作り、開くたびに最新の内容で集計します。
-        銀行明細を取り込んでいない期間は、入金は「入金済み」に変更した日、経費の支払はカード引落日（引落月の27日）で推定します。
-        経費は税込で処理しています。
-      </span>
-    </p>
   );
 }
 
@@ -134,15 +119,13 @@ export function GrandTotalCard({
 export function AccountRows({
   rows,
   hrefFor,
-  emptyText = "該当なし",
 }: {
   rows: readonly { account: string; amount: number }[];
   /** 科目の元帳へのリンク。 */
   hrefFor?: (account: string) => string;
-  emptyText?: string;
 }) {
   if (rows.length === 0) {
-    return <p className="px-5 py-4 text-sm text-ink-muted">{emptyText}</p>;
+    return <p className="px-5 py-4 text-sm text-ink-muted">なし</p>;
   }
   return (
     <ul className="divide-y divide-line">

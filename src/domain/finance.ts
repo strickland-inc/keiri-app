@@ -45,7 +45,6 @@ export interface TaxEstimateResult {
   ytdProfit: number;
   annualizedProfit: number;
   estimatedTax: number;
-  disclaimer: string;
 }
 
 /**
@@ -250,7 +249,5 @@ export function taxEstimate(
     ytdProfit,
     annualizedProfit,
     estimatedTax,
-    disclaimer:
-      "この数値はあくまで目安です。実際の法人税額は税率区分・各種控除・地方法人税・住民税・事業税等により異なります。正式な税額は税理士にご確認ください。役員報酬の水準を調整することで法人税と個人所得税の合計を最適化できる場合があります。",
   };
 }

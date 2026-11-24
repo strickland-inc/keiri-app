@@ -10,7 +10,34 @@ import {
 import { formatNumber, parseSeq } from "@/domain/numbering";
 import type { NewPartyInput, Party } from "@/domain/party";
 import type { Issuer, NewIssuerInput } from "@/domain/issuer";
-import type { User, NewUserInput } from "@/domain/user";
+import { normalizeLoginId, type User, type NewUserInput } from "@/domain/user";
+import type { Invite, NewInviteInput } from "@/domain/invite";
+import {
+  AUDIT_LIST_MAX,
+  type AuditEntry,
+  type AuditFilter,
+  type NewAuditEntry,
+} from "@/domain/audit";
+import {
+  applyAccessPatch,
+  applyProfilePatch,
+  applySecurityPatch,
+  clearTotp,
+  emptyAccess,
+  emptyProfile,
+  emptySecurity,
+  mergeUser,
+  versionKey,
+  type AccessPatch,
+  type AccessRow,
+  type ProfilePatch,
+  type ProfileRow,
+  type SecurityPatch,
+  type SecurityRow,
+  type UserRow,
+  type VersionSide,
+} from "./user-merge";
+import { isStaleFailKey, PRUNE_LIMIT } from "./auth-counters";
 import type { ApiToken, NewApiTokenInput } from "@/domain/api-token";
 import type { Expense, NewExpenseInput } from "@/domain/expense";
 import type { MerchantRule, NewMerchantRule } from "@/domain/merchant";
@@ -32,6 +59,9 @@ import type {
   RevenueRepository,
   SettingsRepository,
   UserRepository,
+  InviteRepository,
+  AuditRepository,
+  AuthCounterRepository,
 } from "./types";
 
 function uuid(): string {
@@ -369,28 +399,243 @@ const issuerRepo: IssuerRepository = {
   },
 };
 
-const users: User[] = [];
+// ── ユーザー（スプレッドシート版と同じ行に分けて持つ）────────────────────────────
+const userRows: UserRow[] = [];
+const profileRows = new Map<string, ProfileRow>();
+const securityRows = new Map<string, SecurityRow>();
+const accessRows = new Map<string, AccessRow>();
+const versionStore = new Map<string, number>();
+
+function mergedMemoryUser(u: UserRow): User {
+  return mergeUser(
+    u,
+    profileRows.get(u.id),
+    securityRows.get(u.id),
+    accessRows.get(u.id),
+    {
+      admin: versionStore.get(versionKey("admin", u.id)) ?? 0,
+      self: versionStore.get(versionKey("self", u.id)) ?? 0,
+    },
+  );
+}
+
+function memoryUserRow(id: string): UserRow {
+  const row = userRows.find((u) => u.id === id);
+  if (!row) throw new Error(`ユーザーが見つかりません: ${id}`);
+  return row;
+}
+
+function bumpMemoryVersion(side: VersionSide, id: string): void {
+  const key = versionKey(side, id);
+  versionStore.set(key, (versionStore.get(key) ?? 0) + 1);
+}
 
 const userRepo: UserRepository = {
   async list(): Promise<User[]> {
-    return [...users];
+    return userRows.map(mergedMemoryUser);
   },
   async get(id: string): Promise<User | null> {
-    return users.find((u) => u.id === id) ?? null;
+    const row = userRows.find((u) => u.id === id);
+    return row ? mergedMemoryUser(row) : null;
   },
   async findByLoginId(loginId: string): Promise<User | null> {
-    return users.find((u) => u.loginId === loginId) ?? null;
+    const wanted = normalizeLoginId(loginId);
+    const row = userRows.find((u) => normalizeLoginId(u.loginId) === wanted);
+    return row ? mergedMemoryUser(row) : null;
   },
   async create(input: NewUserInput): Promise<User> {
     const ts = now();
-    const record: User = { ...input, id: uuid(), createdAt: ts, updatedAt: ts };
-    users.push(record);
-    return record;
+    const id = uuid();
+    const row: UserRow = {
+      id,
+      loginId: normalizeLoginId(input.loginId),
+      passwordHash: input.passwordHash,
+      role: input.role,
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    userRows.push(row);
+    profileRows.set(id, { id, displayName: input.displayName, updatedAt: ts });
+    securityRows.set(id, {
+      ...emptySecurity(id),
+      passwordHash: input.passwordHash,
+      passwordChangedAt: ts,
+      updatedAt: ts,
+    });
+    return mergedMemoryUser(row);
   },
   async remove(id: string): Promise<void> {
-    removeById(users, id);
+    removeById(userRows, id);
+    profileRows.delete(id);
+    securityRows.delete(id);
+    accessRows.delete(id);
+    versionStore.delete(versionKey("admin", id));
+    versionStore.delete(versionKey("self", id));
+  },
+  async updateProfile(id: string, patch: ProfilePatch): Promise<User> {
+    const row = memoryUserRow(id);
+    profileRows.set(
+      id,
+      applyProfilePatch(profileRows.get(id) ?? emptyProfile(id), patch, now()),
+    );
+    return mergedMemoryUser(row);
+  },
+  async updateSecurity(id: string, patch: SecurityPatch): Promise<User> {
+    const row = memoryUserRow(id);
+    if (patch.bumpSession) bumpMemoryVersion("self", id);
+    securityRows.set(
+      id,
+      applySecurityPatch(
+        securityRows.get(id) ?? emptySecurity(id),
+        patch,
+        now(),
+      ),
+    );
+    return mergedMemoryUser(row);
+  },
+  async updateAccess(id: string, patch: AccessPatch): Promise<User> {
+    const row = memoryUserRow(id);
+    if (patch.bumpSession) bumpMemoryVersion("admin", id);
+    if (patch.status !== undefined) {
+      accessRows.set(
+        id,
+        applyAccessPatch(accessRows.get(id) ?? emptyAccess(id), patch, now()),
+      );
+    }
+    return mergedMemoryUser(row);
+  },
+  async updateRole(id, role, options): Promise<User> {
+    const idx = userRows.findIndex((u) => u.id === id);
+    if (idx < 0) throw new Error(`ユーザーが見つかりません: ${id}`);
+    if (options?.bumpSession) bumpMemoryVersion("admin", id);
+    userRows[idx] = { ...userRows[idx], role, updatedAt: now() };
+    return mergedMemoryUser(userRows[idx]);
+  },
+  async resetTotp(id: string): Promise<User> {
+    const row = memoryUserRow(id);
+    bumpMemoryVersion("admin", id);
+    securityRows.set(
+      id,
+      clearTotp(securityRows.get(id) ?? emptySecurity(id), now()),
+    );
+    return mergedMemoryUser(row);
+  },
+  async bumpSessionVersion(id: string, side: VersionSide): Promise<void> {
+    bumpMemoryVersion(side, id);
   },
 };
+
+const inviteStore: Invite[] = [];
+
+const inviteRepo: InviteRepository = {
+  async list(): Promise<Invite[]> {
+    return [...inviteStore];
+  },
+  async get(id: string): Promise<Invite | null> {
+    return inviteStore.find((i) => i.id === id) ?? null;
+  },
+  async findByTokenHash(tokenHash: string): Promise<Invite | null> {
+    return inviteStore.find((i) => i.tokenHash === tokenHash) ?? null;
+  },
+  async create(input: NewInviteInput): Promise<Invite> {
+    const record: Invite = {
+      ...input,
+      id: uuid(),
+      createdAt: now(),
+      usedAt: "",
+    };
+    inviteStore.push(record);
+    return record;
+  },
+  async markUsed(id: string, usedAt: string): Promise<void> {
+    const idx = inviteStore.findIndex((i) => i.id === id);
+    if (idx >= 0) inviteStore[idx] = { ...inviteStore[idx], usedAt };
+  },
+  async remove(id: string): Promise<void> {
+    removeById(inviteStore as unknown as StoredRecord[], id);
+  },
+};
+
+const auditStore: AuditEntry[] = [];
+
+const auditRepo: AuditRepository = {
+  async append(entry: NewAuditEntry): Promise<void> {
+    auditStore.push({ ...entry, id: uuid(), at: now() });
+  },
+  async list(filter?: AuditFilter): Promise<AuditEntry[]> {
+    const limit = Math.min(filter?.limit ?? AUDIT_LIST_MAX, AUDIT_LIST_MAX);
+    return auditStore
+      .filter(
+        (e) =>
+          (!filter?.action || e.action === filter.action) &&
+          (!filter?.actorId || e.actorId === filter.actorId),
+      )
+      .reverse()
+      .slice(0, limit);
+  },
+};
+
+const counterStore = new Map<string, number>();
+
+const authCounterRepo: AuthCounterRepository = {
+  async inspect(keys, nowMs) {
+    return {
+      values: keys.map((key) => counterStore.get(key) ?? 0),
+      stale: [...counterStore.keys()]
+        .filter((key) => isStaleFailKey(key, nowMs))
+        .slice(0, PRUNE_LIMIT),
+    };
+  },
+  async next(key, floor = 0) {
+    const seq = Math.max(counterStore.get(key) ?? 0, floor, 0) + 1;
+    counterStore.set(key, seq);
+    return seq;
+  },
+  async nextMany(keys) {
+    return Promise.all(keys.map((key) => authCounterRepo.next(key)));
+  },
+  async deleteMany(keys) {
+    for (const key of keys) counterStore.delete(key);
+  },
+  async prune(nowMs) {
+    const stale = [...counterStore.keys()]
+      .filter((key) => isStaleFailKey(key, nowMs))
+      .slice(0, PRUNE_LIMIT);
+    for (const key of stale) counterStore.delete(key);
+  },
+  async deleteByPrefix(prefixes) {
+    for (const key of [...counterStore.keys()]) {
+      if (prefixes.some((prefix) => key.startsWith(prefix))) {
+        counterStore.delete(key);
+      }
+    }
+  },
+};
+
+/**
+ * 認証まわりのデータを空に戻す。テスト専用（メモリ版は 1 つのプロセスで状態を持つため）。
+ */
+export function resetAuthMemory(): void {
+  userRows.length = 0;
+  profileRows.clear();
+  securityRows.clear();
+  accessRows.clear();
+  versionStore.clear();
+  inviteStore.length = 0;
+  auditStore.length = 0;
+  counterStore.clear();
+  settingsStore.clear();
+}
+
+/** auth_counters に残っている鍵の数。テスト専用。 */
+export function authCounterCount(): number {
+  return counterStore.size;
+}
+
+/** 新しいタブができる前の、users だけに 6 列の行がある既存の利用者を再現する。テスト専用。 */
+export function seedLegacyUser(row: UserRow): void {
+  userRows.push(row);
+}
 
 const expenseStore: Expense[] = [];
 
@@ -608,5 +853,8 @@ export const memoryRepositories: Repositories = {
   bankTransactions: bankTransactionRepo,
   revenues: revenueRepo,
   apiTokens: apiTokenRepo,
+  invites: inviteRepo,
+  audit: auditRepo,
+  authCounters: authCounterRepo,
   backend: "memory",
 };

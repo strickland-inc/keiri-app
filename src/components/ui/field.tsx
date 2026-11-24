@@ -5,20 +5,17 @@ interface FieldProps {
   label: string;
   htmlFor?: string;
   required?: boolean;
-  /** ラベルの下の補足。 */
-  hint?: string;
   /** 入力の下のエラー文。 */
   error?: string;
   className?: string;
   children: ReactNode;
 }
 
-/** ラベル・補足・エラーつきの入力欄。 */
+/** ラベル・エラーつきの入力欄。 */
 export function Field({
   label,
   htmlFor,
   required,
-  hint,
   error,
   className,
   children,
@@ -33,7 +30,6 @@ export function Field({
           </span>
         )}
       </label>
-      {hint && <p className="-mt-1 text-xs text-ink-muted">{hint}</p>}
       {children}
       {error && (
         <p role="alert" className="text-xs text-danger">

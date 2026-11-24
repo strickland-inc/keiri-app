@@ -59,7 +59,7 @@ function RunwaySummary({ runway }: { runway: RunwayResult }) {
     return (
       <p className="flex items-center gap-2 text-sm font-medium text-success">
         <Icon name="trending_up" className="text-[18px]" />
-        資産は増加傾向です
+        増加傾向
       </p>
     );
   }
@@ -67,15 +67,17 @@ function RunwaySummary({ runway }: { runway: RunwayResult }) {
     return (
       <p className="flex items-center gap-2 text-sm text-ink-muted">
         <Icon name="trending_flat" className="text-[18px]" />
-        収支はほぼ均衡しています
+        均衡
       </p>
     );
   }
   return (
     <p className="flex items-center gap-2 text-sm font-medium">
       <Icon name="warning" className="text-[18px] text-warning" />
-      残高が約 <span className="tabular text-danger">{runway.months}</span>{" "}
-      ヶ月で尽きる見込みです
+      残高があと <span className="tabular text-danger">
+        {runway.months}
+      </span>{" "}
+      ヶ月
     </p>
   );
 }
@@ -98,11 +100,7 @@ export function MonthlyCashflow({
         <NetBars series={series} />
 
         <div className="flex flex-col gap-3 border-t border-line pt-5">
-          {cashBalance == null ? (
-            <p className="text-sm text-ink-muted">
-              残高を入力すると、資金の見通しを表示します。
-            </p>
-          ) : (
+          {cashBalance != null && (
             <>
               <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
                 <span className="text-sm text-ink-muted">残高</span>

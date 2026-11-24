@@ -1,4 +1,5 @@
 import { currentSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 import { getRepositories } from "@/repositories";
 import { loadCompanyContext } from "@/lib/active-company";
 import { isValidClosingTerm, loadClosing } from "@/lib/closing/load-closing";
@@ -19,7 +20,8 @@ function isKind(v: string): v is Kind {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  if (!(await currentSession())) {
+  const session = await currentSession();
+  if (!session) {
     return new Response("Unauthorized", { status: 401 });
   }
   const url = new URL(request.url);
@@ -47,6 +49,13 @@ export async function GET(request: Request): Promise<Response> {
   const filename = `freee取引_${KIND_LABELS[kind]}_第${term}期_${company.active.name}.csv`;
   const encodedName = encodeURIComponent(filename);
   const fallbackName = asciiFallbackFilename(filename);
+
+  await recordAudit(
+    session,
+    "export.freee_csv",
+    { type: "closing", id: String(term) },
+    `freee 用の${KIND_LABELS[kind]} CSV を書き出し（第${term}期、${company.active.name}）`,
+  );
 
   return new Response(csv, {
     status: 200,

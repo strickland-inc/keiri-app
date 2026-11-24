@@ -75,9 +75,6 @@ export function AiFinanceAdvice(): React.ReactElement {
               </li>
             ))}
           </ul>
-          <p className="text-xs text-ink-muted">
-            参考情報です。実際の財務判断は専門家にご相談ください。
-          </p>
           <Button
             variant="ghost"
             size="sm"

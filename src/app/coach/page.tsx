@@ -13,6 +13,7 @@ import {
 import { loadMoneySnapshot } from "@/lib/money-snapshot-service";
 import { getRepositories } from "@/repositories";
 import { saveMoneyPlan } from "./actions";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function CoachPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }): Promise<React.ReactElement> {
+  await requirePageSession();
   const query = await searchParams;
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(query.month ?? "")
     ? String(query.month)
@@ -56,10 +58,7 @@ export default async function CoachPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader
-        title="今月のお金"
-        description="月の予算と固定費から、今月あといくら使えるかを見ます。"
-      />
+      <PageHeader title="今月のお金" />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat
@@ -71,7 +70,7 @@ export default async function CoachPage({
         <Stat label="着地予測" value={formatYen(totals.forecastAmount)} />
         <Stat
           label="安全に使える金額"
-          value={safe === null ? "目標を設定してください" : formatYen(safe)}
+          value={safe === null ? "未設定" : formatYen(safe)}
           tone={safe !== null && safe < 0 ? "negative" : "positive"}
         />
       </div>
@@ -141,7 +140,6 @@ export default async function CoachPage({
             <Field
               label="今後請求される固定費"
               htmlFor="coach-commitments"
-              hint="基本は「名称,金額,self」。サブスクは末尾に「subscription,active」を加えます。本人負担外はotherです。"
               className="sm:col-span-2"
             >
               <Textarea

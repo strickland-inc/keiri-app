@@ -1,6 +1,8 @@
 "use server";
 
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
+import { yen } from "@/app/_actions/audit-summary";
 import { isIsoDate, isYen } from "@/domain/limits";
 
 import { getRepositories } from "@/repositories";
@@ -52,18 +54,30 @@ function parseRevenueFromFormData(
 }
 
 export async function createRevenue(formData: FormData): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const issuerId = await resolveIssuerId(repos);
   const input = parseRevenueFromFormData(formData, issuerId);
-  await repos.revenues.create(input);
+  const created = await repos.revenues.create(input);
+  await recordAudit(
+    session,
+    "revenue.created",
+    { type: "revenue", id: created.id },
+    `売上を登録（${input.date}、${input.partyName.slice(0, 40)}、${yen(input.amount)}）`,
+  );
   revalidatePath("/revenues");
   redirect("/revenues");
 }
 
 export async function removeRevenue(id: string): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   await repos.revenues.remove(id);
+  await recordAudit(
+    session,
+    "revenue.deleted",
+    { type: "revenue", id },
+    "売上を削除",
+  );
   revalidatePath("/revenues");
 }

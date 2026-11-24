@@ -11,9 +11,28 @@ import { CompanySwitcher } from "@/components/company-switcher";
 import type { Issuer } from "@/domain/issuer";
 import { cn } from "@/lib/utils";
 
+/** サイドバーの下に出す、ログイン中の人。 */
+export interface ShellUser {
+  displayName: string;
+  loginId: string;
+}
+
+/** ログインしていない人が開く画面。シェル（メニュー）なしで描く。 */
+function isBarePath(pathname: string): boolean {
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/setup" ||
+    pathname === "/recover" ||
+    pathname.startsWith("/invite/") ||
+    pathname.startsWith("/reset/")
+  );
+}
+
 interface AppShellProps {
   children: React.ReactNode;
   isAdmin: boolean;
+  user: ShellUser | null;
   /** 切替に出す会社の一覧。ログイン前や取得に失敗した場合は空で来る。 */
   companies: Issuer[];
   activeCompanyId: string | null;
@@ -21,6 +40,7 @@ interface AppShellProps {
 
 interface SidebarContentProps {
   isAdmin: boolean;
+  user: ShellUser | null;
   companies: Issuer[];
   activeCompanyId: string | null;
   onNavigate?: () => void;
@@ -49,6 +69,7 @@ function SidebarNav({
 /** サイドバーの中身（PC の固定表示とモバイルのドロワーで共通）。 */
 function SidebarContent({
   isAdmin,
+  user,
   companies,
   activeCompanyId,
   onNavigate,
@@ -85,15 +106,32 @@ function SidebarContent({
         </Suspense>
       </div>
 
-      <form action={logout} className="mt-3 border-t border-line pt-3">
-        <button
-          type="submit"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-ink/[0.04] hover:text-ink"
-        >
-          <Icon name="logout" className="text-[20px]" />
-          ログアウト
-        </button>
-      </form>
+      <div className="mt-3 flex flex-col gap-0.5 border-t border-line pt-3">
+        {user && (
+          <Link
+            href="/account"
+            onClick={onNavigate}
+            className="flex flex-col rounded-xl px-3 py-2 transition-colors hover:bg-ink/[0.04]"
+          >
+            <span className="truncate text-sm font-medium text-ink">
+              {user.displayName}
+            </span>
+            <span className="truncate text-xs text-ink-muted">
+              アカウント・{user.loginId}
+            </span>
+          </Link>
+        )}
+        {/* ログアウトは POST にする。GET だと、よそのページに置かれたリンクや画像から勝手にログアウトさせられる */}
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-ink/[0.04] hover:text-ink"
+          >
+            <Icon name="logout" className="text-[20px]" />
+            ログアウト
+          </button>
+        </form>
+      </div>
     </>
   );
 }
@@ -101,6 +139,7 @@ function SidebarContent({
 export function AppShell({
   children,
   isAdmin,
+  user,
   companies,
   activeCompanyId,
 }: AppShellProps) {
@@ -115,14 +154,15 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
 
-  // ログイン画面はシェル（メニュー）無しでフル表示
-  if (pathname === "/login") return <>{children}</>;
+  // ログイン前の画面はシェル（メニュー）無しでフル表示
+  if (isBarePath(pathname)) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-canvas p-3 md:flex">
         <SidebarContent
           isAdmin={isAdmin}
+          user={user}
           companies={companies}
           activeCompanyId={activeCompanyId}
         />
@@ -179,6 +219,7 @@ export function AppShell({
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-canvas p-3 shadow-[var(--shadow-pop)]">
             <SidebarContent
               isAdmin={isAdmin}
+              user={user}
               companies={companies}
               activeCompanyId={activeCompanyId}
               onNavigate={() => setDrawerOpen(false)}

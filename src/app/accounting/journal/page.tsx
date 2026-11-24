@@ -12,8 +12,9 @@ import {
   THead,
   Tr,
 } from "@/components/ui/table";
-import { Amount, AccountingNote, FiscalYearTabs } from "../_components";
+import { Amount, FiscalYearTabs } from "../_components";
 import { loadAccounting } from "../_lib";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function JournalPage({
 }: {
   searchParams: Promise<{ fy?: string }>;
 }) {
+  await requirePageSession();
   const { fy: fyParam } = await searchParams;
   const { journal, fy, years } = await loadAccounting(fyParam);
   const entries = entriesInRange(journal, { from: fy.from, to: fy.to });
@@ -30,7 +32,6 @@ export default async function JournalPage({
     <div className="flex flex-col gap-8">
       <PageHeader
         title="仕訳帳"
-        description={`${fy.label}の仕訳 ${entries.length}件（請求書と経費から自動作成）`}
         actions={
           <FiscalYearTabs
             years={years}
@@ -93,8 +94,6 @@ export default async function JournalPage({
           </Table>
         </TableCard>
       )}
-
-      <AccountingNote />
     </div>
   );
 }

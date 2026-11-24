@@ -13,6 +13,7 @@ import { MonthlyCashflow } from "./_components/MonthlyCashflow";
 import { MonthStats } from "./_components/OverviewStats";
 import { RecentDocuments } from "./_components/RecentDocuments";
 import { TaxEstimate } from "./_components/TaxEstimate";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ function parseCashBalance(raw: string | undefined): number | null {
 }
 
 export default async function HomePage() {
+  await requirePageSession();
   const repos = await getRepositories();
   const company = await loadCompanyContext(repos);
   const scope = companyScope(company);
@@ -65,7 +67,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <PageHeader title="ホーム" description={company.active?.name} />
+      <PageHeader title="ホーム" />
 
       <RecentDocuments
         documents={recentDocuments}

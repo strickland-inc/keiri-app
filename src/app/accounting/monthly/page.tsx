@@ -9,13 +9,9 @@ import {
   THead,
   Tr,
 } from "@/components/ui/table";
-import {
-  Amount,
-  AccountingNote,
-  FiscalYearTabs,
-  tableFootRowClass,
-} from "../_components";
+import { Amount, FiscalYearTabs, tableFootRowClass } from "../_components";
 import { loadAccounting } from "../_lib";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +20,7 @@ export default async function MonthlyPage({
 }: {
   searchParams: Promise<{ fy?: string }>;
 }) {
+  await requirePageSession();
   const { fy: fyParam } = await searchParams;
   const { journal, fy, years, today } = await loadAccounting(fyParam);
 
@@ -43,8 +40,7 @@ export default async function MonthlyPage({
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="損益計算書（月次）"
-        description={`${fy.label}の売上・費用・純利益を月ごとに見ます。`}
+        title="月次損益計算書"
         actions={
           <FiscalYearTabs
             years={years}
@@ -126,8 +122,6 @@ export default async function MonthlyPage({
           </tfoot>
         </Table>
       </TableCard>
-
-      <AccountingNote />
     </div>
   );
 }

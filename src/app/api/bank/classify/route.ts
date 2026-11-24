@@ -1,4 +1,5 @@
 import { currentSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 import type { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -32,7 +33,8 @@ const bodySchema = z.object({
 
 /** 取引を Jev で仕訳して保存し、照合できた請求書を入金済みにする。 */
 export async function POST(req: NextRequest): Promise<Response> {
-  if (!(await currentSession())) {
+  const session = await currentSession();
+  if (!session) {
     return new Response("Unauthorized", { status: 401 });
   }
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
@@ -61,6 +63,14 @@ export async function POST(req: NextRequest): Promise<Response> {
       await repos.documents.update(id, { status: "paid" });
     }
 
+    if (result.created.length > 0) {
+      await recordAudit(
+        session,
+        "bank.imported",
+        { type: "bank_transaction" },
+        `銀行明細 ${result.created.length} 件を取り込み（請求書 ${result.matchedDocumentIds.length} 件を入金済みに）`,
+      );
+    }
     revalidatePath("/bank");
     revalidatePath("/documents");
     revalidatePath("/");

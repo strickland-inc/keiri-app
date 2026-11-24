@@ -1,6 +1,7 @@
 "use server";
 
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 
 import { getRepositories } from "@/repositories";
 import { revalidatePath } from "next/cache";
@@ -32,10 +33,16 @@ function parsePartyFromFormData(formData: FormData): NewPartyInput {
 }
 
 export async function createParty(formData: FormData): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const input = parsePartyFromFormData(formData);
-  await repos.parties.create(input);
+  const created = await repos.parties.create(input);
+  await recordAudit(
+    session,
+    "party.created",
+    { type: "party", id: created.id },
+    `取引先「${input.name}」を登録`,
+  );
   revalidatePath("/parties");
   redirect("/parties");
 }
@@ -44,19 +51,32 @@ export async function updateParty(
   id: string,
   formData: FormData,
 ): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   const input = parsePartyFromFormData(formData);
   await repos.parties.update(id, input);
+  await recordAudit(
+    session,
+    "party.updated",
+    { type: "party", id },
+    `取引先「${input.name}」を更新`,
+  );
   revalidatePath("/parties");
   revalidatePath(`/parties/${id}`);
   redirect("/parties");
 }
 
 export async function removeParty(id: string): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
+  const existing = await repos.parties.get(id);
   await repos.parties.remove(id);
+  await recordAudit(
+    session,
+    "party.deleted",
+    { type: "party", id },
+    `取引先「${existing?.name ?? id}」を削除`,
+  );
   revalidatePath("/parties");
   redirect("/parties");
 }

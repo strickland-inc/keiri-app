@@ -5,13 +5,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Stat } from "@/components/ui/stat";
 import {
   AccountRows,
-  AccountingNote,
   FiscalYearTabs,
   GrandTotalCard,
   SectionCard,
   TotalRow,
 } from "../_components";
 import { ledgerHref, loadAccounting } from "../_lib";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,7 @@ export default async function ProfitAndLossPage({
 }: {
   searchParams: Promise<{ fy?: string }>;
 }) {
+  await requirePageSession();
   const { fy: fyParam } = await searchParams;
   const { journal, fy, years, today } = await loadAccounting(fyParam);
 
@@ -34,13 +35,17 @@ export default async function ProfitAndLossPage({
     <div className="flex flex-col gap-8">
       <PageHeader
         title="損益計算書"
-        description={`${formatJpDate(fy.from)} 〜 ${formatJpDate(to)}`}
         actions={
-          <FiscalYearTabs
-            years={years}
-            current={fy}
-            basePath="/accounting/pl"
-          />
+          <>
+            <span className="tabular text-sm text-ink-muted">
+              {formatJpDate(fy.from)} 〜 {formatJpDate(to)}
+            </span>
+            <FiscalYearTabs
+              years={years}
+              current={fy}
+              basePath="/accounting/pl"
+            />
+          </>
         }
       />
 
@@ -57,30 +62,17 @@ export default async function ProfitAndLossPage({
 
       <div className="flex flex-col gap-6">
         <SectionCard title="収益">
-          <AccountRows
-            rows={pl.revenues}
-            hrefFor={toLedger}
-            emptyText="この期間の売上はありません"
-          />
+          <AccountRows rows={pl.revenues} hrefFor={toLedger} />
           <TotalRow label="収益合計" value={pl.totalRevenue} />
         </SectionCard>
 
         <SectionCard title="費用">
-          <AccountRows
-            rows={pl.expenses}
-            hrefFor={toLedger}
-            emptyText="この期間の経費はありません"
-          />
+          <AccountRows rows={pl.expenses} hrefFor={toLedger} />
           <TotalRow label="費用合計" value={pl.totalExpense} />
         </SectionCard>
 
-        <GrandTotalCard
-          label="当期純利益（収益 − 費用）"
-          value={pl.netIncome}
-        />
+        <GrandTotalCard label="当期純利益" value={pl.netIncome} />
       </div>
-
-      <AccountingNote />
     </div>
   );
 }

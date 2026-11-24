@@ -6,7 +6,7 @@ import { ConfirmDeleteButton } from "@/app/_master/confirm-delete-button";
 export function DeletePartyButton({ id }: { id: string }) {
   return (
     <ConfirmDeleteButton
-      confirmMessage="この取引先を削除しますか？この操作は取り消せません。"
+      confirmMessage="この取引先を削除しますか？"
       onDelete={() => removeParty(id)}
     />
   );

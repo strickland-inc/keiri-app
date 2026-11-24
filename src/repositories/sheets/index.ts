@@ -13,6 +13,9 @@ import type {
   RevenueRepository,
   SettingsRepository,
   UserRepository,
+  InviteRepository,
+  AuditRepository,
+  AuthCounterRepository,
 } from "../types";
 import type {
   DocumentRecord,
@@ -21,12 +24,41 @@ import type {
 } from "@/domain/documents";
 import type { NewPartyInput, Party } from "@/domain/party";
 import type { Issuer, NewIssuerInput } from "@/domain/issuer";
+import { normalizeLoginId } from "@/domain/user";
 import type { User, NewUserInput } from "@/domain/user";
+import type { Invite, NewInviteInput } from "@/domain/invite";
+import {
+  AUDIT_LIST_MAX,
+  type AuditEntry,
+  type AuditFilter,
+  type NewAuditEntry,
+} from "@/domain/audit";
+import {
+  applyAccessPatch,
+  applyProfilePatch,
+  applySecurityPatch,
+  clearTotp,
+  emptyAccess,
+  emptyProfile,
+  emptySecurity,
+  mergeUser,
+  versionKey,
+  type AccessPatch,
+  type AccessRow,
+  type ProfilePatch,
+  type ProfileRow,
+  type SecurityPatch,
+  type SecurityRow,
+  type UserRow,
+  type VersionSide,
+} from "../user-merge";
+import { isStaleFailKey, PRUNE_LIMIT } from "../auth-counters";
 import type { Expense, NewExpenseInput } from "@/domain/expense";
 import type { MerchantRule, NewMerchantRule } from "@/domain/merchant";
 import type { BankTransaction, NewBankTransactionInput } from "@/domain/bank";
 import type { NewRevenueInput, Revenue } from "@/domain/revenue";
 import type { ApiToken, NewApiTokenInput } from "@/domain/api-token";
+import type { GatewayCall } from "@/lib/gateway";
 import { formatNumber, parseSeq } from "@/domain/numbering";
 import { counterKey, matchesCompany } from "../scope";
 import {
@@ -37,6 +69,9 @@ import {
   upsertRowById,
   deleteRowById,
   incrementCounter,
+  sendToSheet,
+  nextSeqIn,
+  nextSeqMany,
 } from "./sheetsApi";
 import {
   SHEET_NAMES,
@@ -48,6 +83,16 @@ import {
   rowToIssuer,
   userToRow,
   rowToUser,
+  profileToRow,
+  rowToProfile,
+  securityToRow,
+  rowToSecurity,
+  accessToRow,
+  rowToAccess,
+  inviteToRow,
+  rowToInvite,
+  auditToRow,
+  rowToAudit,
   expenseToRow,
   rowToExpense,
   merchantRuleToRow,
@@ -124,12 +169,6 @@ const issuerCodec: SheetCodec<Issuer> = {
   label: "発行元",
   toRow: issuerToRow,
   fromRow: rowToIssuer,
-};
-const userCodec: SheetCodec<User> = {
-  sheet: SHEET_NAMES.users,
-  label: "ユーザー",
-  toRow: userToRow,
-  fromRow: rowToUser,
 };
 const expenseCodec: SheetCodec<Expense> = {
   sheet: SHEET_NAMES.expenses,
@@ -283,31 +322,367 @@ const issuerRepo: IssuerRepository = {
 
 // ── UserRepository ────────────────────────────────────────────────────────────
 
+interface UserTables {
+  users: UserRow[];
+  profiles: Map<string, ProfileRow>;
+  security: Map<string, SecurityRow>;
+  access: Map<string, AccessRow>;
+  versions: Map<string, number>;
+}
+
+/** 5 つのタブを読む（小さい表なので、1 回の通信でまとめて読まれる）。 */
+async function readUserTables(): Promise<UserTables> {
+  const [userRows, profileRows, securityRows, accessRows, versionRows] =
+    await Promise.all([
+      readAll(SHEET_NAMES.users),
+      readAll(SHEET_NAMES.userProfiles),
+      readAll(SHEET_NAMES.userSecurity),
+      readAll(SHEET_NAMES.userAccess),
+      readAll(SHEET_NAMES.sessionVersions),
+    ]);
+  const byId = <T>(rows: string[][], parse: (row: string[]) => T) =>
+    new Map(rows.map((r) => [r[0] ?? "", parse(r)] as const));
+  return {
+    users: userRows.map(rowToUser).filter((u) => u.id !== ""),
+    profiles: byId(profileRows, rowToProfile),
+    security: byId(securityRows, rowToSecurity),
+    access: byId(accessRows, rowToAccess),
+    versions: new Map(
+      versionRows.map(
+        (r) => [r[0] ?? "", Number.parseInt(r[1] ?? "", 10) || 0] as const,
+      ),
+    ),
+  };
+}
+
+function mergeFrom(t: UserTables, u: UserRow): User {
+  return mergeUser(
+    u,
+    t.profiles.get(u.id),
+    t.security.get(u.id),
+    t.access.get(u.id),
+    {
+      admin: t.versions.get(versionKey("admin", u.id)) ?? 0,
+      self: t.versions.get(versionKey("self", u.id)) ?? 0,
+    },
+  );
+}
+
+function bumpCall(side: VersionSide, id: string): GatewayCall {
+  return {
+    op: "nextSeq",
+    tab: SHEET_NAMES.sessionVersions,
+    key: versionKey(side, id),
+    floor: 0,
+  };
+}
+
+/** 書き込み前に読み直したユーザー。書いたあとの値は、読み直して返す（版数は nextSeq の結果なので）。 */
+async function reread(id: string): Promise<User> {
+  const t = await readUserTables();
+  const row = t.users.find((u) => u.id === id);
+  if (!row) throw new Error(`ユーザーが見つかりません: ${id}`);
+  return mergeFrom(t, row);
+}
+
+async function userTablesFor(id: string): Promise<{
+  tables: UserTables;
+  row: UserRow;
+}> {
+  const tables = await readUserTables();
+  const row = tables.users.find((u) => u.id === id);
+  if (!row) throw new Error(`ユーザーが見つかりません: ${id}`);
+  return { tables, row };
+}
+
 const userRepo: UserRepository = {
   async list(): Promise<User[]> {
-    const rows = await readAll(SHEET_NAMES.users);
-    return rows.map(rowToUser);
+    const t = await readUserTables();
+    return t.users.map((u) => mergeFrom(t, u));
   },
 
   async get(id: string): Promise<User | null> {
-    return getRecord(userCodec, id);
+    const t = await readUserTables();
+    const row = t.users.find((u) => u.id === id);
+    return row ? mergeFrom(t, row) : null;
   },
 
   async findByLoginId(loginId: string): Promise<User | null> {
-    const rows = await readAll(SHEET_NAMES.users);
-    const row = rows.find((r) => r[1] === loginId);
-    return row ? rowToUser(row) : null;
+    const wanted = normalizeLoginId(loginId);
+    const t = await readUserTables();
+    const row = t.users.find((u) => normalizeLoginId(u.loginId) === wanted);
+    return row ? mergeFrom(t, row) : null;
   },
 
   async create(input: NewUserInput): Promise<User> {
     const ts = now();
-    const record: User = { ...input, id: uuid(), createdAt: ts, updatedAt: ts };
-    await appendRow(SHEET_NAMES.users, userToRow(record));
-    return record;
+    const id = uuid();
+    const userRow: UserRow = {
+      id,
+      loginId: normalizeLoginId(input.loginId),
+      passwordHash: input.passwordHash,
+      role: input.role,
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    const profile: ProfileRow = {
+      id,
+      displayName: input.displayName,
+      updatedAt: ts,
+    };
+    const security: SecurityRow = {
+      ...emptySecurity(id),
+      passwordHash: input.passwordHash,
+      passwordChangedAt: ts,
+      updatedAt: ts,
+    };
+    // users に行を足してから、ほかのタブに書く（users に無い id の行を作らないため）
+    await sendToSheet([
+      { op: "append", tab: SHEET_NAMES.users, rows: [userToRow(userRow)] },
+      {
+        op: "upsertById",
+        tab: SHEET_NAMES.userProfiles,
+        id,
+        row: profileToRow(profile),
+      },
+      {
+        op: "upsertById",
+        tab: SHEET_NAMES.userSecurity,
+        id,
+        row: securityToRow(security),
+      },
+    ]);
+    return mergeUser(userRow, profile, security, undefined, {
+      admin: 0,
+      self: 0,
+    });
   },
 
   async remove(id: string): Promise<void> {
-    await removeRecord(SHEET_NAMES.users, id);
+    await sendToSheet([
+      { op: "deleteById", tab: SHEET_NAMES.users, id },
+      { op: "deleteById", tab: SHEET_NAMES.userProfiles, id },
+      { op: "deleteById", tab: SHEET_NAMES.userSecurity, id },
+      { op: "deleteById", tab: SHEET_NAMES.userAccess, id },
+      {
+        op: "deleteById",
+        tab: SHEET_NAMES.sessionVersions,
+        id: versionKey("admin", id),
+      },
+      {
+        op: "deleteById",
+        tab: SHEET_NAMES.sessionVersions,
+        id: versionKey("self", id),
+      },
+    ]);
+  },
+
+  async updateProfile(id: string, patch: ProfilePatch): Promise<User> {
+    const { tables } = await userTablesFor(id);
+    // 書くのは user_profiles の行だけ。ほかの行は、読んだ値で書き直さない
+    const next = applyProfilePatch(
+      tables.profiles.get(id) ?? emptyProfile(id),
+      patch,
+      now(),
+    );
+    await sendToSheet([
+      {
+        op: "upsertById",
+        tab: SHEET_NAMES.userProfiles,
+        id,
+        row: profileToRow(next),
+      },
+    ]);
+    return reread(id);
+  },
+
+  async updateSecurity(id: string, patch: SecurityPatch): Promise<User> {
+    const { tables } = await userTablesFor(id);
+    const next = applySecurityPatch(
+      tables.security.get(id) ?? emptySecurity(id),
+      patch,
+      now(),
+    );
+    // 版を先に上げる。あとの書き込みが失敗しても、古い Cookie が残るより締め出すほうが安全
+    const calls: GatewayCall[] = [];
+    if (patch.bumpSession) calls.push(bumpCall("self", id));
+    // 行が無い既存の利用者に updateById を送ると not_found で落ちるので、必ず upsert
+    calls.push({
+      op: "upsertById",
+      tab: SHEET_NAMES.userSecurity,
+      id,
+      row: securityToRow(next),
+    });
+    await sendToSheet(calls);
+    return reread(id);
+  },
+
+  async updateAccess(id: string, patch: AccessPatch): Promise<User> {
+    const { tables } = await userTablesFor(id);
+    const calls: GatewayCall[] = [];
+    if (patch.bumpSession) calls.push(bumpCall("admin", id));
+    if (patch.status !== undefined) {
+      const next = applyAccessPatch(
+        tables.access.get(id) ?? emptyAccess(id),
+        patch,
+        now(),
+      );
+      calls.push({
+        op: "upsertById",
+        tab: SHEET_NAMES.userAccess,
+        id,
+        row: accessToRow(next),
+      });
+    }
+    if (calls.length > 0) await sendToSheet(calls);
+    return reread(id);
+  },
+
+  async updateRole(id, role, options): Promise<User> {
+    const { row } = await userTablesFor(id);
+    const calls: GatewayCall[] = [];
+    if (options?.bumpSession) calls.push(bumpCall("admin", id));
+    // 書くのは users の行だけ。user_access は書き直さない（無効化と重なっても消えない）
+    calls.push({
+      op: "updateById",
+      tab: SHEET_NAMES.users,
+      id,
+      row: userToRow({ ...row, role, updatedAt: now() }),
+    });
+    await sendToSheet(calls);
+    return reread(id);
+  },
+
+  async resetTotp(id: string): Promise<User> {
+    const { tables } = await userTablesFor(id);
+    const next = clearTotp(tables.security.get(id) ?? emptySecurity(id), now());
+    await sendToSheet([
+      bumpCall("admin", id),
+      {
+        op: "upsertById",
+        tab: SHEET_NAMES.userSecurity,
+        id,
+        row: securityToRow(next),
+      },
+    ]);
+    return reread(id);
+  },
+
+  async bumpSessionVersion(id: string, side: VersionSide): Promise<void> {
+    await sendToSheet([bumpCall(side, id)]);
+  },
+};
+
+// ── InviteRepository ──────────────────────────────────────────────────────────
+
+const inviteRepo: InviteRepository = {
+  async list(): Promise<Invite[]> {
+    return (await readAll(SHEET_NAMES.invites)).map(rowToInvite);
+  },
+  async get(id: string): Promise<Invite | null> {
+    const row = await findRow(SHEET_NAMES.invites, id);
+    return row ? rowToInvite(row) : null;
+  },
+  async findByTokenHash(tokenHash: string): Promise<Invite | null> {
+    const rows = await readAll(SHEET_NAMES.invites);
+    const row = rows.find((r) => r[2] === tokenHash);
+    return row ? rowToInvite(row) : null;
+  },
+  async create(input: NewInviteInput): Promise<Invite> {
+    const record: Invite = {
+      ...input,
+      id: uuid(),
+      createdAt: now(),
+      usedAt: "",
+    };
+    await appendRow(SHEET_NAMES.invites, inviteToRow(record));
+    return record;
+  },
+  async markUsed(id: string, usedAt: string): Promise<void> {
+    const row = await findRow(SHEET_NAMES.invites, id);
+    if (!row) return;
+    await upsertRowById(
+      SHEET_NAMES.invites,
+      id,
+      inviteToRow({ ...rowToInvite(row), usedAt }),
+    );
+  },
+  async remove(id: string): Promise<void> {
+    await removeRecord(SHEET_NAMES.invites, id);
+  },
+};
+
+// ── AuditRepository ───────────────────────────────────────────────────────────
+
+const auditRepo: AuditRepository = {
+  async append(entry: NewAuditEntry): Promise<void> {
+    const record: AuditEntry = { ...entry, id: uuid(), at: now() };
+    await appendRow(SHEET_NAMES.auditLog, auditToRow(record));
+  },
+  async list(filter?: AuditFilter): Promise<AuditEntry[]> {
+    const rows = await readAll(SHEET_NAMES.auditLog);
+    const limit = Math.min(filter?.limit ?? AUDIT_LIST_MAX, AUDIT_LIST_MAX);
+    return rows
+      .map((row, index) => ({ entry: rowToAudit(row), index }))
+      .filter(
+        ({ entry }) =>
+          (!filter?.action || entry.action === filter.action) &&
+          (!filter?.actorId || entry.actorId === filter.actorId),
+      )
+      .sort((a, b) =>
+        a.entry.at === b.entry.at
+          ? b.index - a.index
+          : a.entry.at < b.entry.at
+            ? 1
+            : -1,
+      )
+      .slice(0, limit)
+      .map(({ entry }) => entry);
+  },
+};
+
+// ── AuthCounterRepository ─────────────────────────────────────────────────────
+
+const authCounterRepo: AuthCounterRepository = {
+  async inspect(keys, nowMs) {
+    const rows = await readAll(SHEET_NAMES.authCounters);
+    const byKey = new Map(rows.map((r) => [r[0] ?? "", r[1] ?? ""] as const));
+    return {
+      values: keys.map((key) => Number.parseInt(byKey.get(key) ?? "", 10) || 0),
+      stale: [...byKey.keys()]
+        .filter((key) => isStaleFailKey(key, nowMs))
+        .slice(0, PRUNE_LIMIT),
+    };
+  },
+  next(key, floor = 0) {
+    return nextSeqIn(SHEET_NAMES.authCounters, key, floor);
+  },
+  nextMany(keys) {
+    return nextSeqMany(SHEET_NAMES.authCounters, keys);
+  },
+  async deleteMany(keys) {
+    if (keys.length === 0) return;
+    await sendToSheet(
+      keys.map(
+        (id) =>
+          ({ op: "deleteById", tab: SHEET_NAMES.authCounters, id }) as const,
+      ),
+    );
+  },
+  async prune(nowMs) {
+    const rows = await readAll(SHEET_NAMES.authCounters);
+    const stale = rows
+      .map((r) => r[0] ?? "")
+      .filter((key) => isStaleFailKey(key, nowMs))
+      .slice(0, PRUNE_LIMIT);
+    await authCounterRepo.deleteMany(stale);
+  },
+  async deleteByPrefix(prefixes) {
+    const rows = await readAll(SHEET_NAMES.authCounters);
+    const keys = rows
+      .map((r) => r[0] ?? "")
+      .filter((key) => prefixes.some((prefix) => key.startsWith(prefix)));
+    await authCounterRepo.deleteMany(keys);
   },
 };
 
@@ -553,5 +928,8 @@ export const sheetsRepositories: Repositories = {
   bankTransactions: bankTransactionRepo,
   revenues: revenueRepo,
   apiTokens: apiTokenRepo,
+  invites: inviteRepo,
+  audit: auditRepo,
+  authCounters: authCounterRepo,
   backend: "sheets",
 };

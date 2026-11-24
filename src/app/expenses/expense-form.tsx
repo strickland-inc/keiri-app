@@ -67,12 +67,7 @@ export function ExpenseForm() {
           />
         </Field>
 
-        <Field
-          label="費目"
-          htmlFor="expense-category"
-          hint="未選択なら、過去に確定した利用先から自動で決めます。"
-          error={errors.category}
-        >
+        <Field label="費目" htmlFor="expense-category" error={errors.category}>
           <Select
             id="expense-category"
             name="category"
@@ -102,7 +97,7 @@ export function ExpenseForm() {
         </Field>
       </div>
 
-      {state.ok && <Alert tone="success">経費を追加しました。</Alert>}
+      {state.ok && <Alert tone="success">追加しました</Alert>}
 
       <div>
         <Button type="submit" variant="secondary" disabled={pending}>

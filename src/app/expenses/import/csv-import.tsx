@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Stat } from "@/components/ui/stat";
@@ -18,7 +20,7 @@ import {
 import type { ClassifyMethod } from "@/domain/expense-rules";
 import type { ExpenseCsvFormat } from "@/domain/expense-csv";
 import { cn, formatJpDate } from "@/lib/utils";
-import { MAX_FILE_BYTES, MAX_IMPORT_ROWS } from "./limits";
+import { MAX_FILE_BYTES } from "./limits";
 import {
   previewExpenseCsv,
   saveExpenseCsv,
@@ -143,11 +145,7 @@ export function CsvImport() {
         >
           <Icon name="upload_file" className="text-[32px] text-ink-faint" />
           <span className="text-sm font-medium text-ink">
-            カード明細の CSV をここにドロップ、またはクリックして選ぶ
-          </span>
-          <span className="max-w-md text-xs leading-relaxed text-ink-muted">
-            文字コードと列の並びは自動で判定します。取り込むのは利用額が 0
-            円より大きい行だけです。
+            カード明細 CSV をドロップ、または選ぶ
           </span>
           <input
             ref={inputRef}
@@ -171,9 +169,8 @@ export function CsvImport() {
           <>
             <Alert tone="success">
               <span className="font-medium">{phase.fileName}</span>:{" "}
-              {phase.created} 件を経費に取り込みました
-              {phase.remaining > 0 &&
-                `。残り ${phase.remaining} 件は、もう一度同じ CSV を選ぶと続きを取り込めます（取込済みは自動で飛ばします）`}
+              {phase.created} 件を取り込みました
+              {phase.remaining > 0 && `、残り ${phase.remaining} 件`}
             </Alert>
             <div className="flex gap-2">
               <Link
@@ -222,45 +219,32 @@ function Preview({
 
   return (
     <>
-      <p className="text-sm text-ink-muted">
-        <span className="font-medium text-ink">{fileName}</span>（
-        {FORMAT_LABELS[preview.format]}）
+      <p className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium text-ink">{fileName}</span>
+        <Badge>{FORMAT_LABELS[preview.format]}</Badge>
+        {reviewCount > 0 && (
+          <Badge tone="warning">要確認 {reviewCount} 件</Badge>
+        )}
       </p>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="新規" value={preview.newTotal} unit="件" />
-        <Stat
-          label="取込済みで飛ばす"
-          value={preview.duplicates}
-          unit="件"
-          hint="日付・利用先・金額が同じ経費"
-        />
-        <Stat
-          label="読めなかった"
-          value={preview.skipped}
-          unit="件"
-          hint="返金・支払い、日付や金額を読めない行"
-        />
+        <Stat label="取込済みで飛ばす" value={preview.duplicates} unit="件" />
+        <Stat label="読めなかった" value={preview.skipped} unit="件" />
       </div>
 
       {remaining > 0 && (
         <Alert tone="warning">
-          1 回に取り込めるのは {MAX_IMPORT_ROWS} 件までです。先頭の{" "}
-          {preview.rows.length} 件を取り込み、残り {remaining}{" "}
-          件は、取り込み後にもう一度同じ CSV を選んでください。
+          <span className="tabular">
+            {preview.rows.length} / {preview.newTotal} 件
+          </span>
         </Alert>
       )}
 
       {preview.rows.length === 0 ? (
-        <Alert tone="info">取り込む新しい明細はありません。</Alert>
+        <EmptyState icon="inbox" title="新しい明細はありません" />
       ) : (
         <>
-          {reviewCount > 0 && (
-            <p className="text-xs text-ink-muted">
-              要確認 {reviewCount}{" "}
-              件は、取り込み後に経費の一覧で費目を選び直せます。
-            </p>
-          )}
           <TableCard>
             <Table>
               <THead>

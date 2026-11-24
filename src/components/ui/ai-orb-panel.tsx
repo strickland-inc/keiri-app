@@ -176,9 +176,6 @@ function DockBar({ onOpen }: { onOpen: () => void }) {
     >
       <ColorOrb dimension={22} />
       <span className="text-sm font-medium text-ink">AIでたたき台を作成</span>
-      <span className="ml-auto hidden text-xs text-ink-muted sm:inline">
-        クリックして案件概要を入力
-      </span>
     </motion.button>
   );
 }
@@ -229,16 +226,13 @@ function InputForm({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="例：中小企業向けの予約管理Webアプリを新規開発。要件定義・デザイン・実装・3ヶ月運用保守まで。"
+        placeholder="例：予約管理Webアプリの新規開発"
         aria-label="案件概要"
         className={cn(controlClass, "flex-1 resize-none bg-canvas py-2.5")}
       />
 
       <div className="flex items-center justify-between gap-3">
-        <span className="hidden text-xs text-ink-muted sm:inline">
-          ⌘+Enter で送信
-        </span>
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-3">
           {error && (
             <span role="alert" className="text-xs text-danger">
               {error}

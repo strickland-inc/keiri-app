@@ -129,11 +129,7 @@ export function BankImport() {
       >
         <Icon name="upload_file" className="text-[32px] text-ink-faint" />
         <span className="text-sm font-medium text-ink">
-          銀行の明細 CSV をここにドロップ、またはクリックして選ぶ
-        </span>
-        <span className="max-w-md text-xs leading-relaxed text-ink-muted">
-          銀行名の指定は不要です。文字コードや列の並びは自動で判定し、勘定科目は
-          Jev が仕訳します。
+          明細 CSV をドロップ、または選ぶ
         </span>
         <input
           ref={inputRef}

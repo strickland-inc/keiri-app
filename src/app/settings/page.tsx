@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { SectionCard } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { currentSession } from "@/lib/session";
+import { requirePageSession } from "@/lib/session";
 import { getRepositories } from "@/repositories";
 import { CreateTokenForm } from "./create-token-form";
 import { RevokeTokenButton } from "./revoke-button";
@@ -10,18 +10,15 @@ import { RevokeTokenButton } from "./revoke-button";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const session = await currentSession();
-  if (session?.role !== "admin") redirect("/");
+  const session = await requirePageSession();
+  if (session.role !== "admin") redirect("/");
 
   const repos = await getRepositories();
   const tokens = await repos.apiTokens.list();
 
   return (
     <div className="flex max-w-3xl flex-col gap-8">
-      <PageHeader
-        title="API トークン"
-        description="エージェントや外部のプログラムが、このアプリの API を呼ぶためのトークンです。"
-      />
+      <PageHeader title="API トークン" />
 
       <SectionCard title="トークンを発行">
         <CreateTokenForm />
@@ -29,11 +26,7 @@ export default async function SettingsPage() {
 
       <SectionCard title="発行済みのトークン">
         {tokens.length === 0 ? (
-          <EmptyState
-            icon="key"
-            title="トークンはまだありません"
-            description="発行したトークンは、Authorization ヘッダーに Bearer で付けて使います。"
-          />
+          <EmptyState icon="key" title="トークンはまだありません" />
         ) : (
           <ul className="flex flex-col divide-y divide-line">
             {tokens.map((token) => (

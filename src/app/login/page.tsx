@@ -1,71 +1,58 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/auth";
+import { currentSession } from "@/lib/session";
 import { countUsers } from "@/lib/setup-state";
-import { login } from "./actions";
+import { sitePath } from "@/lib/site-path";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { AuthFrame } from "./auth-frame";
+import { LoginForm } from "./login-form";
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ next?: string; reset?: string; recovered?: string }>;
 }) {
   if (isDemoMode()) redirect("/");
+  const sp = await searchParams;
+  const next = sitePath(sp.next ?? "/");
+
+  // ログイン済みなら、ログイン画面を見せずに先へ進める
+  const session = await currentSession().catch(() => null);
+  if (session) redirect(next);
+
   // ユーザーが 1 人もいなければ、最初の管理者を作る画面へ送る。
   const users = await countUsers();
   if (users.ok && users.count === 0) redirect("/setup");
 
-  const sp = await searchParams;
-  const hasError = sp.error === "1";
-  const next = sp.next ?? "/";
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4">
-      <div className="w-full max-w-[360px]">
-        <h1 className="mb-8 text-center text-2xl font-semibold tracking-tight">
-          KEIRI にログイン
-        </h1>
-
-        {!users.ok && (
-          <Alert tone="danger" className="mb-4">
-            {users.message}
-          </Alert>
-        )}
-
-        {hasError && (
-          <Alert tone="danger" className="mb-4">
-            ID またはパスワードが違います
-          </Alert>
-        )}
-
-        <form action={login} className="flex flex-col gap-4">
-          <input type="hidden" name="next" value={next} />
-          <Field label="ID" htmlFor="id">
-            <Input
-              id="id"
-              name="id"
-              type="text"
-              autoComplete="username"
-              required
-              autoFocus
-            />
-          </Field>
-          <Field label="パスワード" htmlFor="password">
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </Field>
-          <Button type="submit" className="mt-2 w-full">
-            ログイン
-          </Button>
-        </form>
-      </div>
-    </div>
+    <AuthFrame title="KEIRI にログイン">
+      {!users.ok && (
+        <Alert tone="danger" className="mb-4">
+          {users.message}
+        </Alert>
+      )}
+      {sp.reset === "1" && (
+        <Alert tone="success" className="mb-4">
+          パスワードを変えました
+        </Alert>
+      )}
+      {sp.recovered === "1" && (
+        <Alert tone="success" className="mb-4">
+          管理者のパスワードを入れ替えました
+        </Alert>
+      )}
+      <LoginForm next={next} />
+      <p className="mt-8 text-center text-xs text-ink-muted">
+        <Link
+          href="/recover"
+          className="underline underline-offset-2 hover:text-ink"
+        >
+          管理者の復旧
+        </Link>
+      </p>
+    </AuthFrame>
   );
 }

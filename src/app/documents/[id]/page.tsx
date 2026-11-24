@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getRepositories } from "@/repositories";
 import { DOCUMENT_TYPE_LABELS } from "@/domain/documents";
 import { summarize, formatYen } from "@/domain/money";
-import { StatusBadge } from "@/components/ui/badge";
+import { Badge, StatusBadge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
@@ -15,6 +15,7 @@ import { buildMessageTexts, deadlineLine } from "./message-texts";
 import { MessageCopyPanel } from "./message-copy-panel";
 import { PdfDownloadButton } from "./pdf-download-button";
 import { StatusActions } from "./status-actions";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function DocumentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePageSession();
   const { id } = await params;
   const repos = await getRepositories();
   const doc = await repos.documents.get(id);
@@ -58,7 +60,6 @@ export default async function DocumentDetailPage({
     <div className="flex flex-col gap-8">
       <PageHeader
         title={doc.number || "（番号なし）"}
-        description={`${typeLabel} ・ ${doc.title}`}
         actions={
           <>
             <StatusBadge status={doc.status} />
@@ -95,6 +96,11 @@ export default async function DocumentDetailPage({
           </>
         }
       />
+
+      <p className="-mt-4 flex flex-wrap items-center gap-2 text-sm">
+        <Badge>{typeLabel}</Badge>
+        <span className="font-medium">{doc.title}</span>
+      </p>
 
       <DocumentPreview doc={doc} party={party} issuer={issuer} />
 
