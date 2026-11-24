@@ -35,6 +35,17 @@
 - Node.js 22.18 以上
 - Git
 
+### Codex や Claude Code に取得を任せる
+
+Codex か Claude Code に、次の文をそのまま渡してください。
+
+```text
+https://github.com/abanba-inc/keiri-app
+上記リポジトリをクローンして、README.md を読み、初期設定の手順どおりにインストールしてください。
+gitは消して再初期化してください。
+Google や Cloudflare へのログインなど、自分でできない操作は、私に頼んでください。
+```
+
 ### 1. スプレッドシートのコピー
 
 1. [マスタのスプレッドシート](https://docs.google.com/spreadsheets/d/1FazkgSK-4GCK8LMRZUqNFKnRQyyUjp06qBMLXIcH64g/copy) を開く。
