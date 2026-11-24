@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 脆弱性の報告
+    url: https://github.com/strickland-inc/keiri-app/security/advisories/new
+    about: 脆弱性は Issue に書かず、この非公開の報告の窓口から知らせてください。
