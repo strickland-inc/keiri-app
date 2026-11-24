@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
 import {
   parsePlannedCommitmentsText,
   type MoneyPlan,
@@ -21,7 +22,7 @@ function amount(formData: FormData, name: string, required = false): number {
 }
 
 export async function saveMoneyPlan(formData: FormData): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
 
   const month = String(formData.get("month") ?? "");
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))
@@ -39,6 +40,12 @@ export async function saveMoneyPlan(formData: FormData): Promise<void> {
 
   const repos = await getRepositories();
   await repos.settings.set(`money_plan:${month}`, JSON.stringify(plan));
+  await recordAudit(
+    session,
+    "settings.updated",
+    { type: "setting", id: `money_plan:${month}` },
+    `${month} のお金の計画を保存（目標 ${(plan.targetAmount ?? 0).toLocaleString("ja-JP")} 円）`,
+  );
   revalidatePath("/coach");
   redirect(`/coach?month=${month}`);
 }

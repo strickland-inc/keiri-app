@@ -15,6 +15,10 @@ const SMALL_TABS: ReadonlySet<string> = new Set([
   SHEET_NAMES.documents,
   SHEET_NAMES.settings,
   SHEET_NAMES.users,
+  SHEET_NAMES.userProfiles,
+  SHEET_NAMES.userSecurity,
+  SHEET_NAMES.userAccess,
+  SHEET_NAMES.sessionVersions,
 ]);
 
 /**
@@ -152,4 +156,28 @@ export async function incrementCounter(
     { op: "nextSeq", tab: SHEET_NAMES.counters, key, floor },
   ]);
   return seq;
+}
+
+/** 任意のタブで nextSeq を呼ぶ（auth_counters など）。 */
+export async function nextSeqIn(
+  tab: string,
+  key: string,
+  floor = 0,
+): Promise<number> {
+  const [{ seq }] = await sendToSheet<[{ seq: number }]>([
+    { op: "nextSeq", tab, key, floor },
+  ]);
+  return seq;
+}
+
+/** 複数の鍵を 1 回の通信で進める。結果は鍵と同じ順。 */
+export async function nextSeqMany(
+  tab: string,
+  keys: string[],
+): Promise<number[]> {
+  if (keys.length === 0) return [];
+  const results = await sendToSheet<Array<{ seq: number }>>(
+    keys.map((key) => ({ op: "nextSeq", tab, key, floor: 0 }) as const),
+  );
+  return results.map((result) => result.seq);
 }

@@ -15,10 +15,12 @@ import {
   Tr,
   Td,
 } from "@/components/ui/table";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function IssuersPage() {
+  await requirePageSession();
   const repos = await getRepositories();
   const issuers = await repos.issuers.list();
 
@@ -40,7 +42,6 @@ export default async function IssuersPage() {
     <div className="flex flex-col gap-8">
       <PageHeader
         title="会社"
-        description="請求書などの差出人（自社・屋号）を管理します。"
         actions={sorted.length > 0 ? addButton : undefined}
       />
 
@@ -48,7 +49,6 @@ export default async function IssuersPage() {
         <EmptyState
           icon="apartment"
           title="会社がまだありません"
-          description="会社を登録すると、サイドバーで切り替えて会社ごとの帳簿を持てます。"
           action={addButton}
         />
       ) : (

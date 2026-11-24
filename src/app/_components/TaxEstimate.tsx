@@ -41,10 +41,6 @@ export function TaxEstimate({ estimate }: { estimate: TaxEstimateResult }) {
         />
         <Row label="法人税の概算" value={estimate.estimatedTax} />
       </dl>
-      <p className="mt-5 text-xs leading-relaxed text-ink-muted">
-        売上と経費は今期の累計です。概算利益と法人税は、そこから年換算した目安です。
-        {estimate.disclaimer}
-      </p>
     </SectionCard>
   );
 }

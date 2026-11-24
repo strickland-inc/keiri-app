@@ -4,6 +4,7 @@ import { updateParty } from "@/app/parties/actions";
 import { PartyForm } from "@/app/parties/party-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { DeletePartyButton } from "./delete-button";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export default async function EditPartyPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePageSession();
   const { id } = await params;
   const repos = await getRepositories();
   const party = await repos.parties.get(id);
@@ -23,7 +25,6 @@ export default async function EditPartyPage({
     <div className="flex flex-col gap-8">
       <PageHeader
         title="取引先を編集"
-        description={party.name}
         actions={<DeletePartyButton id={id} />}
       />
 

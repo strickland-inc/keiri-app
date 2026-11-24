@@ -6,7 +6,7 @@ import { revokeApiToken } from "./actions";
 export function RevokeTokenButton({ id, name }: { id: string; name: string }) {
   return (
     <ConfirmDeleteButton
-      confirmMessage={`「${name}」を削除しますか？ このトークンを使っているプログラムは、API を呼べなくなります。`}
+      confirmMessage={`「${name}」を削除しますか？`}
       onDelete={() => revokeApiToken(id)}
     />
   );

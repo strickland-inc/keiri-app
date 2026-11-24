@@ -348,6 +348,7 @@ test("学習辞書が往復する", async () => {
 test("ユーザーが往復する", async () => {
   const created = await repos.users.create({
     loginId: "0022",
+    displayName: "テスト",
     passwordHash: "pbkdf2$100000$c2FtcGxl$aGFzaA==",
     role: "admin",
   });
@@ -550,7 +551,11 @@ test("小さい表は、どれか 1 つを読むと残りも同じ要求で読�
         SHEET_NAMES.documents,
         SHEET_NAMES.issuers,
         SHEET_NAMES.parties,
+        SHEET_NAMES.sessionVersions,
         SHEET_NAMES.settings,
+        SHEET_NAMES.userAccess,
+        SHEET_NAMES.userProfiles,
+        SHEET_NAMES.userSecurity,
         SHEET_NAMES.users,
       ],
       name,

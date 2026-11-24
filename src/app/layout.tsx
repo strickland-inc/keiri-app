@@ -76,6 +76,11 @@ export default async function RootLayout({
       <body className="min-h-full bg-surface text-ink">
         <AppShell
           isAdmin={session?.role === "admin"}
+          user={
+            session
+              ? { displayName: session.displayName, loginId: session.loginId }
+              : null
+          }
           companies={companies}
           activeCompanyId={activeCompanyId}
         >

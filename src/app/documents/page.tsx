@@ -25,6 +25,7 @@ import {
   THead,
   Tr,
 } from "@/components/ui/table";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function DocumentsPage({
 }: {
   searchParams: Promise<{ type?: string; status?: string }>;
 }) {
+  await requirePageSession();
   const sp = await searchParams;
   const activeType: DocumentType | undefined =
     sp.type && isDocumentType(sp.type) ? sp.type : undefined;
@@ -97,11 +99,7 @@ export default async function DocumentsPage({
       <LinkTabs items={tabs} label="書類の絞り込み" />
 
       {docs.length === 0 ? (
-        <EmptyState
-          icon="description"
-          title="該当する書類がありません"
-          description="「新規作成」から作るか、別の種類を選んでください。"
-        />
+        <EmptyState icon="description" title="該当する書類がありません" />
       ) : (
         <TableCard>
           <Table>

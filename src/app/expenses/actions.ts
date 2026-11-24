@@ -1,6 +1,8 @@
 "use server";
 
 import { assertSession } from "@/lib/session";
+import { recordAudit } from "@/lib/audit";
+import { yen } from "@/app/_actions/audit-summary";
 import { isIsoDate, isYen, LIMITS } from "@/domain/limits";
 
 import { getRepositories } from "@/repositories";
@@ -38,7 +40,7 @@ export async function createExpense(input: {
   category: string;
   note?: string;
 }): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const amount = Math.round(Number(input.amount));
   if (!isIsoDate(input.date)) throw new Error("日付が不正です");
   if (!isYen(amount)) throw new Error("金額が不正です");
@@ -47,7 +49,7 @@ export async function createExpense(input: {
     : "要確認";
   const repos = await getRepositories();
   const company = await loadCompanyContext(repos);
-  await repos.expenses.create({
+  const created = await repos.expenses.create({
     issuerId: company.active?.id,
     date: input.date,
     merchant: String(input.merchant).slice(0, LIMITS.line),
@@ -56,6 +58,12 @@ export async function createExpense(input: {
     source: "領収書スキャン",
     note: String(input.note ?? "").slice(0, LIMITS.text),
   });
+  await recordAudit(
+    session,
+    "expense.created",
+    { type: "expense", id: created.id },
+    `経費を登録（${input.date}、${String(input.merchant).slice(0, 40)}、${yen(amount)}）`,
+  );
   revalidatePath("/expenses");
 }
 
@@ -63,11 +71,17 @@ export async function updateExpenseCategory(
   id: string,
   category: string,
 ): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   if (!isExpenseCategory(category)) return;
   const repos = await getRepositories();
   await repos.expenses.update(id, { category });
   await learnFromExpense(repos, id);
+  await recordAudit(
+    session,
+    "expense.updated",
+    { type: "expense", id },
+    `経費の費目を「${category}」に変更`,
+  );
   revalidatePath("/expenses");
 }
 
@@ -126,7 +140,7 @@ export async function createManualExpense(
   _prev: ManualExpenseState,
   formData: FormData,
 ): Promise<ManualExpenseState> {
-  await assertSession();
+  const session = await assertSession();
   const values: ManualExpenseValues = {
     date: readText(formData, "date"),
     merchant: readText(formData, "merchant"),
@@ -169,7 +183,7 @@ export async function createManualExpense(
     if (rule) category = rule.category;
   }
 
-  await repos.expenses.create({
+  const created = await repos.expenses.create({
     issuerId: company.active.id,
     date: input.date,
     merchant: input.merchant,
@@ -178,13 +192,25 @@ export async function createManualExpense(
     source: "手入力",
     note: input.note,
   });
+  await recordAudit(
+    session,
+    "expense.created",
+    { type: "expense", id: created.id },
+    `経費を登録（${input.date}、${input.merchant.slice(0, 40)}、${yen(input.amount)}）`,
+  );
   revalidatePath("/expenses");
   return { ok: true };
 }
 
 export async function removeExpense(id: string): Promise<void> {
-  await assertSession();
+  const session = await assertSession();
   const repos = await getRepositories();
   await repos.expenses.remove(id);
+  await recordAudit(
+    session,
+    "expense.deleted",
+    { type: "expense", id },
+    "経費を削除",
+  );
   revalidatePath("/expenses");
 }

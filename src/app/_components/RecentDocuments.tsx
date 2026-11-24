@@ -37,7 +37,6 @@ export function RecentDocuments({
           <EmptyState
             icon="description"
             title="書類がまだありません"
-            description="最初の書類を作成しましょう。"
             action={
               <Link
                 href="/documents/new"

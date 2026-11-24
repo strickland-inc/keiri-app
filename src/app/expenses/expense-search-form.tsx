@@ -159,10 +159,7 @@ export function ExpenseSearchForm({
           </Field>
         </div>
 
-        <div className="mt-5 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs leading-relaxed text-ink-muted">
-            全角・半角、英字の大小、ひらがな・カタカナの違いは自動で吸収します。
-          </p>
+        <div className="mt-5 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-end">
           <div className="flex shrink-0 items-center justify-end gap-2">
             {isActive && (
               <Link

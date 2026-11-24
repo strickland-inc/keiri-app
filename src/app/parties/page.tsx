@@ -14,10 +14,12 @@ import {
   Tr,
   Td,
 } from "@/components/ui/table";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function PartiesPage() {
+  await requirePageSession();
   const repos = await getRepositories();
   const parties = await repos.parties.list();
 
@@ -43,7 +45,6 @@ export default async function PartiesPage() {
         <EmptyState
           icon="group"
           title="取引先がまだありません"
-          description="取引先を登録すると書類の作成時に選択できます。"
           action={addButton}
         />
       ) : (

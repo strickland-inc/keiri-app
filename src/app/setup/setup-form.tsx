@@ -5,10 +5,12 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { createFirstAdmin, type SetupState } from "./actions";
+import { PasswordPair } from "@/components/ui/password-pair";
+import type { FormState } from "@/app/login/form-state";
+import { createFirstAdmin } from "./actions";
 
-export function SetupForm() {
-  const [state, action, pending] = useActionState<SetupState, FormData>(
+export function SetupForm({ demo }: { demo: boolean }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(
     createFirstAdmin,
     {},
   );
@@ -16,16 +18,13 @@ export function SetupForm() {
   return (
     <form action={action} className="flex flex-col gap-4">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
-      <Field
-        label="接続コード"
-        htmlFor="connectionCode"
-        hint="スプレッドシートのメニュー「keiri-app」で発行したコード"
-      >
+      <Field label="接続コード" htmlFor="connectionCode">
         <Input
           id="connectionCode"
           name="connectionCode"
           type="password"
           autoComplete="off"
+          placeholder={demo ? "demo" : undefined}
           required
           autoFocus
         />
@@ -36,20 +35,27 @@ export function SetupForm() {
           name="loginId"
           type="text"
           autoComplete="username"
-          defaultValue={state.loginId}
+          autoCapitalize="none"
+          spellCheck={false}
+          pattern="[A-Za-z0-9._@\-]{3,64}"
+          minLength={3}
+          maxLength={64}
+          defaultValue={state.values?.loginId}
           required
         />
       </Field>
-      <Field label="パスワード" htmlFor="password" hint="12 文字以上">
+      <Field label="表示名" htmlFor="displayName">
         <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          minLength={12}
+          id="displayName"
+          name="displayName"
+          type="text"
+          autoComplete="name"
+          defaultValue={state.values?.displayName}
+          maxLength={50}
           required
         />
       </Field>
+      <PasswordPair />
       <Button type="submit" className="mt-2 w-full" disabled={pending}>
         管理者を作って始める
       </Button>

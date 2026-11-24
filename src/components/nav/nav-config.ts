@@ -8,6 +8,8 @@ export interface NavLeaf {
   href: string;
   /** 管理者のみ表示。 */
   adminOnly?: boolean;
+  /** true なら、配下のパス（/admin/audit など）では選択中にしない。 */
+  exact?: boolean;
 }
 
 export interface NavSection {
@@ -116,9 +118,7 @@ export const NAV_BLOCKS: NavBlock[] = [
           },
           {
             heading: "月次推移",
-            items: [
-              { label: "損益計算書（月次）", href: "/accounting/monthly" },
-            ],
+            items: [{ label: "月次損益計算書", href: "/accounting/monthly" }],
           },
           {
             heading: "主要簿",
@@ -170,11 +170,15 @@ export const NAV_BLOCKS: NavBlock[] = [
       {
         label: "その他設定",
         icon: "settings",
+        // 中身がすべて管理者向けなので、メンバーには空のグループごと隠す
+        adminOnly: true,
         sections: [
           {
             items: [
-              { label: "API トークン", href: "/settings", adminOnly: true },
-              { label: "ユーザー管理", href: "/admin", adminOnly: true },
+              { label: "ユーザー管理", href: "/admin", exact: true },
+              { label: "監査ログ", href: "/admin/audit" },
+              { label: "セキュリティ", href: "/admin/security" },
+              { label: "API トークン", href: "/settings" },
             ],
           },
         ],
@@ -193,6 +197,7 @@ export function isLeafActive(
 ): boolean {
   const target = new URL(leaf.href, "http://local");
   if (target.pathname === "/") return pathname === "/";
+  if (leaf.exact) return pathname === target.pathname;
 
   const samePath =
     pathname === target.pathname || pathname.startsWith(target.pathname + "/");

@@ -16,6 +16,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { RankingTabs } from "./ranking-tabs";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +120,7 @@ function SectionHeading({
 }
 
 export default async function ReportsPage(): Promise<ReactElement> {
+  await requirePageSession();
   const today = new Date();
   const repos = await getRepositories();
   const company = await loadCompanyContext(repos);
@@ -157,7 +159,7 @@ export default async function ReportsPage(): Promise<ReactElement> {
           prevLabel={`先週（${lastWeekLabel}）`}
           rate={weekRate}
         />
-        <RankingCard title="よく使う利用先（今週）" ranking={weekRanking} />
+        <RankingCard title="今週のよく使う利用先" ranking={weekRanking} />
       </section>
 
       <section className="flex flex-col gap-4">
@@ -169,7 +171,7 @@ export default async function ReportsPage(): Promise<ReactElement> {
           prevLabel="先月"
           rate={monthRate}
         />
-        <RankingCard title="よく使う利用先（今月）" ranking={monthRanking} />
+        <RankingCard title="今月のよく使う利用先" ranking={monthRanking} />
       </section>
     </div>
   );

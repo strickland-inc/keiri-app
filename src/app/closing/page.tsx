@@ -29,6 +29,7 @@ import {
   Tr,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export default async function ClosingPage({
 }: {
   searchParams: Promise<{ term?: SearchParamValue }>;
 }): Promise<ReactElement> {
+  await requirePageSession();
   const today = new Date();
   const repos = await getRepositories();
   const company = await loadCompanyContext(repos);
@@ -50,11 +52,10 @@ export default async function ClosingPage({
   if (!activeIssuer || !hasFiscalSettings(activeIssuer)) {
     return (
       <div className="flex flex-col gap-8">
-        <PageHeader title="決算" description={activeIssuer?.name} />
+        <PageHeader title="決算" />
         <EmptyState
           icon="inventory_2"
-          title="会社の設定で決算月と第1期の期末日を入れてください"
-          description="決算集計には、決算月と第1期の期末日の設定が必要です。"
+          title="決算月と第1期の期末日が未設定です"
           action={
             activeIssuer && (
               <Link
@@ -80,7 +81,7 @@ export default async function ClosingPage({
   if (!loaded) {
     return (
       <div className="flex flex-col gap-8">
-        <PageHeader title="決算" description={activeIssuer.name} />
+        <PageHeader title="決算" />
         <Alert tone="danger">この期の集計を読み込めませんでした。</Alert>
       </div>
     );
@@ -95,16 +96,18 @@ export default async function ClosingPage({
     <div className="flex flex-col gap-8">
       <PageHeader
         title="決算"
-        description={`${activeIssuer.name}・${fy.label}`}
         actions={
-          <LinkTabs
-            label="期"
-            items={years.map((y) => ({
-              label: `第${y.term}期`,
-              href: `/closing?term=${y.term}`,
-              active: y.term === term,
-            }))}
-          />
+          <>
+            <span className="text-sm text-ink-muted">{fy.label}</span>
+            <LinkTabs
+              label="期"
+              items={years.map((y) => ({
+                label: `第${y.term}期`,
+                href: `/closing?term=${y.term}`,
+                active: y.term === term,
+              }))}
+            />
+          </>
         }
       />
 
@@ -128,12 +131,7 @@ export default async function ClosingPage({
         >
           <Alert tone="warning">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-semibold">未確定（要確認）</p>
-                <p className="text-xs text-ink-muted">
-                  費目が決まっていない経費。確定させてから試算表に含める
-                </p>
-              </div>
+              <p className="font-semibold">未確定の経費</p>
               <p className="text-lg font-semibold tabular text-warning">
                 {formatYen(report.pending.total)}（{report.pending.count}件）
               </p>
@@ -311,12 +309,6 @@ export default async function ClosingPage({
               試算表 CSV
             </a>
           </div>
-          <p className="text-xs text-ink-muted">
-            経費の決済口座は「役員借入金」で出します。カードの引落が法人口座なら、freee
-            に登録したカード口座の名前を URL の{" "}
-            <code>&amp;account=楽天カード</code> で指定してください。売上の CSV
-            は決済口座を空で出すので、freee 側で入金口座と消し込んでください。
-          </p>
         </div>
       </SectionCard>
     </div>

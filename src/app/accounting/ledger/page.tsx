@@ -13,11 +13,11 @@ import {
 import {
   Amount,
   AccountPills,
-  AccountingNote,
   FiscalYearTabs,
   tableFootRowClass,
 } from "../_components";
 import { ledgerHref, loadAccounting } from "../_lib";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ export default async function LedgerPage({
 }: {
   searchParams: Promise<{ fy?: string; account?: string }>;
 }) {
+  await requirePageSession();
   const { fy: fyParam, account: accountParam } = await searchParams;
   const { journal, fy, years } = await loadAccounting(fyParam);
 
@@ -42,7 +43,6 @@ export default async function LedgerPage({
     <div className="flex flex-col gap-8">
       <PageHeader
         title="総勘定元帳"
-        description={`${fy.label}の「${account}」の取引と残高の推移`}
         actions={
           <FiscalYearTabs
             years={years}
@@ -115,8 +115,6 @@ export default async function LedgerPage({
           </tfoot>
         </Table>
       </TableCard>
-
-      <AccountingNote />
     </div>
   );
 }

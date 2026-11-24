@@ -1,4 +1,5 @@
-import { authorizeApi, unauthorized } from "@/lib/api-auth";
+import { authenticateApi, unauthorized } from "@/lib/api-auth";
+import { recordAudit } from "@/lib/audit";
 import { canVoid } from "@/lib/documents/agent-update";
 import { getRepositories } from "@/repositories";
 
@@ -16,7 +17,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const repos = await getRepositories();
-  if (!(await authorizeApi(request, repos))) return unauthorized();
+  const token = await authenticateApi(request, repos);
+  if (!token) return unauthorized();
 
   const { id } = await params;
   try {
@@ -34,6 +36,12 @@ export async function POST(
     }
 
     const updated = await repos.documents.update(id, { status: "void" });
+    await recordAudit(
+      { tokenName: token.name },
+      "document.status_changed",
+      { type: "document", id },
+      `API で書類 ${updated.number} の状態を「無効」に変更`,
+    );
     return Response.json(
       {
         ok: true,

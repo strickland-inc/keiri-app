@@ -4,6 +4,7 @@ import { updateIssuer } from "@/app/issuers/actions";
 import { IssuerForm } from "@/app/issuers/issuer-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { DeleteIssuerButton } from "./delete-button";
+import { requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export default async function EditIssuerPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePageSession();
   const { id } = await params;
   const repos = await getRepositories();
   const issuer = await repos.issuers.get(id);
@@ -21,11 +23,7 @@ export default async function EditIssuerPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader
-        title="会社を編集"
-        description={issuer.name}
-        actions={<DeleteIssuerButton id={id} />}
-      />
+      <PageHeader title="会社を編集" actions={<DeleteIssuerButton id={id} />} />
 
       <IssuerForm action={boundAction} defaultValues={issuer} />
     </div>

@@ -73,11 +73,7 @@ export function RowButtons({
         title="この明細を削除"
         aria-label="この明細を削除"
         onClick={() => {
-          if (
-            confirm(
-              "この明細を削除しますか？（同じ CSV を再度取り込むと復活します）",
-            )
-          ) {
+          if (confirm("この明細を削除しますか？")) {
             startTransition(() => removeBankTransaction(id));
           }
         }}

@@ -1,4 +1,5 @@
-import { authorizeApi, unauthorized } from "@/lib/api-auth";
+import { authenticateApi, unauthorized } from "@/lib/api-auth";
+import { recordAudit } from "@/lib/audit";
 import { parseIssuerPatch } from "@/lib/documents/agent-update";
 import { getRepositories } from "@/repositories";
 
@@ -16,7 +17,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const repos = await getRepositories();
-  if (!(await authorizeApi(request, repos))) return unauthorized();
+  const token = await authenticateApi(request, repos);
+  if (!token) return unauthorized();
   if (
     request.headers.get("content-type")?.split(";", 1)[0] !== "application/json"
   ) {
@@ -47,6 +49,12 @@ export async function PATCH(
       );
 
     const updated = await repos.issuers.update(id, patch);
+    await recordAudit(
+      { tokenName: token.name },
+      "issuer.updated",
+      { type: "issuer", id },
+      `API で発行元「${updated.name}」を更新（項目: ${Object.keys(patch).join("、")}）`,
+    );
     return Response.json(
       {
         ok: true,

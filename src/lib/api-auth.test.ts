@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ApiToken } from "../domain/api-token.ts";
 import {
+  authenticateApi,
   authorizeApi,
   generateApiToken,
   hashApiToken,
@@ -108,6 +109,31 @@ test("未発行のトークンは、一覧を読んだうえで通さない", as
     false,
   );
   assert.equal(state.listCalls, 1);
+});
+
+test("authenticateApi は合ったトークンの id と名前を返す", async () => {
+  const token = generateApiToken();
+  const other = generateApiToken();
+  const { repos } = reposWith([
+    { ...(await storedToken(other)), id: "token-0", name: "別のトークン" },
+    await storedToken(token),
+  ]);
+  assert.deepEqual(
+    await authenticateApi(requestWith(`Bearer ${token}`), repos),
+    { id: "token-1", name: "テスト用" },
+  );
+});
+
+test("authenticateApi は合わないトークンに null を返し、ハッシュは返さない", async () => {
+  const token = generateApiToken();
+  const { repos } = reposWith([await storedToken(token)]);
+  assert.equal(
+    await authenticateApi(requestWith(`Bearer ${generateApiToken()}`), repos),
+    null,
+  );
+  assert.equal(await authenticateApi(requestWith(), repos), null);
+  const ok = await authenticateApi(requestWith(`Bearer ${token}`), repos);
+  assert.deepEqual(Object.keys(ok ?? {}).sort(), ["id", "name"]);
 });
 
 test("unauthorized は 401 を返す", async () => {
