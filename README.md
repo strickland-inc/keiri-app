@@ -47,7 +47,7 @@
 Codex か Claude Code に、次の文をそのまま渡します。
 
 ```text
-https://github.com/abanba-inc/keiri-app
+https://github.com/strickland-inc/keiri-app
 上記リポジトリをクローンして、README.md を読み、初期設定の手順どおりにインストールしてください。
 gitは消して再初期化してください。
 Google や Cloudflare へのログインなど、自分でできない操作は、私に頼んでください。
